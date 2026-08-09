@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install packet capture headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libpcap-dev
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Check formatting
+        run: rustup run stable cargo fmt --all -- --check
+
+      - name: Run tests
+        run: rustup run stable cargo test --locked --all-targets --all-features
+
+      - name: Run Clippy
+        run: rustup run stable cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Build live capture
+        run: rustup run stable cargo build --locked --release --features live-capture
