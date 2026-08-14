@@ -166,3 +166,11 @@ pub struct SeriesPoint {
     pub packets: u64,
     pub bytes: u64,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NodeInventoryItem {
+    pub node_id: String,
+    pub capture_point: String,
+    pub first_bucket_start: u64,
+    pub last_bucket_start: u64,
+}
