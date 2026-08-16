@@ -7,7 +7,7 @@ Flow Observability is intended for continuous development. The roadmap is ordere
 - Header-only packet capture with explicit local-address direction.
 - Ten-second flow aggregation with node and capture-point provenance.
 - Bounded SQLite agent spool with explicit gap records.
-- Idempotent ingest and node-scoped stats/series queries.
+- Idempotent ingest, `(node_id, capture_point)` inventory discovery, and provenance-preserving stats/series queries.
 - Automated formatting, test, lint, and live-capture build checks.
 
 ## Next

@@ -6,7 +6,7 @@ The current backend data path is:
 
 ```text
 pcap headers -> 10s flow buckets -> bounded SQLite spool
-             -> idempotent HTTP ingest -> minimal stats/series queries
+             -> idempotent HTTP ingest -> provenance-preserving node/stats/series queries
 ```
 
 It never persists packet payloads or pcap files. Live capture reads only enough bytes for L2/L3/L4 headers. Both agent and control-plane storage have byte and age limits, and agent-side eviction records explicit gaps.
@@ -20,8 +20,11 @@ cargo test --all-targets
 cargo run -- synthetic --spool /tmp/flow-spool.db --batches 3
 cargo run -- serve --db /tmp/flow-control.db --listen 127.0.0.1:9080
 cargo run -- upload-once --spool /tmp/flow-spool.db --url http://127.0.0.1:9080/v1/ingest
+curl 'http://127.0.0.1:9080/v1/nodes'
 curl 'http://127.0.0.1:9080/v1/stats?node=synthetic'
+curl 'http://127.0.0.1:9080/v1/stats?node=synthetic&capture_point=synthetic:fixture'
 curl 'http://127.0.0.1:9080/v1/series?node=synthetic'
+curl 'http://127.0.0.1:9080/v1/series?node=synthetic&capture_point=synthetic:fixture'
 ```
 
 Install the packet-capture headers and build the opt-in live-capture feature:

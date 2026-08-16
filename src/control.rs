@@ -14,7 +14,8 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::model::{
-    BatchEnvelope, ControlStats, IngestAck, IngestStatus, SCHEMA_VERSION, SeriesPoint,
+    BatchEnvelope, ControlStats, IngestAck, IngestStatus, NodeInventoryItem, SCHEMA_VERSION,
+    SeriesPoint,
 };
 use crate::sqlite::{integer, unsigned};
 
@@ -180,32 +181,76 @@ impl ControlStore {
         Ok(IngestStatus::Inserted)
     }
 
-    pub fn stats(&self, node: &str) -> anyhow::Result<ControlStats> {
-        self.connection
-            .query_row(
-                "SELECT
-                     (SELECT COUNT(*) FROM ingested_batches WHERE node_id = ?1),
-                     COUNT(*),
-                     COALESCE(SUM(packets), 0),
-                     COALESCE(SUM(bytes), 0)
-                 FROM flow_buckets
-                 WHERE node_id = ?1",
-                [node],
-                |row| {
-                    Ok(ControlStats {
-                        batches: unsigned(row, 0)?,
-                        flow_buckets: unsigned(row, 1)?,
-                        packets: unsigned(row, 2)?,
-                        bytes: unsigned(row, 3)?,
-                    })
-                },
-            )
+    pub fn nodes(&self) -> anyhow::Result<Vec<NodeInventoryItem>> {
+        let mut statement = self.connection.prepare(
+            "SELECT node_id, capture_point, MIN(bucket_start), MAX(bucket_start)
+             FROM flow_buckets
+             GROUP BY node_id, capture_point
+             ORDER BY node_id ASC, capture_point ASC",
+        )?;
+        statement
+            .query_map([], |row| {
+                Ok(NodeInventoryItem {
+                    node_id: row.get(0)?,
+                    capture_point: row.get(1)?,
+                    first_bucket_start: unsigned(row, 2)?,
+                    last_bucket_start: unsigned(row, 3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
+    }
+
+    pub fn stats(&self, node: &str, capture_point: Option<&str>) -> anyhow::Result<ControlStats> {
+        if let Some(capture_point) = capture_point {
+            self.connection
+                .query_row(
+                    "SELECT
+                         (SELECT COUNT(DISTINCT batch_id) FROM flow_buckets WHERE node_id = ?1 AND capture_point = ?2),
+                         COUNT(*),
+                         COALESCE(SUM(packets), 0),
+                         COALESCE(SUM(bytes), 0)
+                     FROM flow_buckets
+                     WHERE node_id = ?1 AND capture_point = ?2",
+                    params![node, capture_point],
+                    |row| {
+                        Ok(ControlStats {
+                            batches: unsigned(row, 0)?,
+                            flow_buckets: unsigned(row, 1)?,
+                            packets: unsigned(row, 2)?,
+                            bytes: unsigned(row, 3)?,
+                        })
+                    },
+                )
+                .map_err(Into::into)
+        } else {
+            self.connection
+                .query_row(
+                    "SELECT
+                         (SELECT COUNT(*) FROM ingested_batches WHERE node_id = ?1),
+                         COUNT(*),
+                         COALESCE(SUM(packets), 0),
+                         COALESCE(SUM(bytes), 0)
+                     FROM flow_buckets
+                     WHERE node_id = ?1",
+                    [node],
+                    |row| {
+                        Ok(ControlStats {
+                            batches: unsigned(row, 0)?,
+                            flow_buckets: unsigned(row, 1)?,
+                            packets: unsigned(row, 2)?,
+                            bytes: unsigned(row, 3)?,
+                        })
+                    },
+                )
+                .map_err(Into::into)
+        }
     }
 
     pub fn series(
         &self,
         node: &str,
+        capture_point: Option<&str>,
         from: Option<u64>,
         to: Option<u64>,
     ) -> anyhow::Result<Vec<SeriesPoint>> {
@@ -214,25 +259,45 @@ impl ControlStore {
         if from > to {
             anyhow::bail!("from must be less than or equal to to");
         }
-        let mut statement = self.connection.prepare(
-            "SELECT bucket_start, SUM(packets), SUM(bytes)
-             FROM flow_buckets
-             WHERE node_id = ?1 AND bucket_start BETWEEN ?2 AND ?3
-             GROUP BY bucket_start
-             ORDER BY bucket_start",
-        )?;
         let from = integer(from, "series from")?;
         let to = integer(to, "series to")?;
-        statement
-            .query_map(params![node, from, to], |row| {
-                Ok(SeriesPoint {
-                    bucket_start: unsigned(row, 0)?,
-                    packets: unsigned(row, 1)?,
-                    bytes: unsigned(row, 2)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
+        if let Some(capture_point) = capture_point {
+            let mut statement = self.connection.prepare(
+                "SELECT bucket_start, SUM(packets), SUM(bytes)
+                 FROM flow_buckets
+                 WHERE node_id = ?1 AND capture_point = ?2 AND bucket_start BETWEEN ?3 AND ?4
+                 GROUP BY bucket_start
+                 ORDER BY bucket_start",
+            )?;
+            statement
+                .query_map(params![node, capture_point, from, to], |row| {
+                    Ok(SeriesPoint {
+                        bucket_start: unsigned(row, 0)?,
+                        packets: unsigned(row, 1)?,
+                        bytes: unsigned(row, 2)?,
+                    })
+                })?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(Into::into)
+        } else {
+            let mut statement = self.connection.prepare(
+                "SELECT bucket_start, SUM(packets), SUM(bytes)
+                 FROM flow_buckets
+                 WHERE node_id = ?1 AND bucket_start BETWEEN ?2 AND ?3
+                 GROUP BY bucket_start
+                 ORDER BY bucket_start",
+            )?;
+            statement
+                .query_map(params![node, from, to], |row| {
+                    Ok(SeriesPoint {
+                        bucket_start: unsigned(row, 0)?,
+                        packets: unsigned(row, 1)?,
+                        bytes: unsigned(row, 2)?,
+                    })
+                })?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(Into::into)
+        }
     }
 }
 
@@ -295,6 +360,7 @@ struct AppState {
 #[derive(Debug, Deserialize)]
 struct SeriesQuery {
     node: String,
+    capture_point: Option<String>,
     from: Option<u64>,
     to: Option<u64>,
 }
@@ -302,6 +368,7 @@ struct SeriesQuery {
 #[derive(Debug, Deserialize)]
 struct NodeQuery {
     node: String,
+    capture_point: Option<String>,
 }
 
 pub async fn serve(
@@ -314,12 +381,23 @@ pub async fn serve(
     };
     let router = Router::new()
         .route("/v1/ingest", post(ingest))
+        .route("/v1/nodes", get(nodes))
         .route("/v1/stats", get(stats))
         .route("/v1/series", get(series))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(listen).await?;
     axum::serve(listener, router).await?;
     Ok(())
+}
+
+async fn nodes(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<NodeInventoryItem>>, (StatusCode, String)> {
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| internal("control store lock poisoned"))?;
+    store.nodes().map(Json).map_err(internal)
 }
 
 async fn ingest(
@@ -362,7 +440,10 @@ async fn stats(
         .store
         .lock()
         .map_err(|_| internal("control store lock poisoned"))?;
-    store.stats(&query.node).map(Json).map_err(internal)
+    store
+        .stats(&query.node, query.capture_point.as_deref())
+        .map(Json)
+        .map_err(internal)
 }
 
 async fn series(
@@ -374,7 +455,12 @@ async fn series(
         .lock()
         .map_err(|_| internal("control store lock poisoned"))?;
     store
-        .series(&query.node, query.from, query.to)
+        .series(
+            &query.node,
+            query.capture_point.as_deref(),
+            query.from,
+            query.to,
+        )
         .map(Json)
         .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))
 }
@@ -450,8 +536,8 @@ mod tests {
 
         assert_eq!(store.ingest(&batch).unwrap(), IngestStatus::Inserted);
         assert_eq!(store.ingest(&batch).unwrap(), IngestStatus::Duplicate);
-        assert_eq!(store.stats("node-a").unwrap().flow_buckets, 1);
-        assert_eq!(store.stats("node-a").unwrap().bytes, 300);
+        assert_eq!(store.stats("node-a", None).unwrap().flow_buckets, 1);
+        assert_eq!(store.stats("node-a", None).unwrap().bytes, 300);
     }
 
     #[test]
@@ -501,9 +587,247 @@ mod tests {
 
         store.ingest_at(&current, 120).unwrap();
 
-        let stats = store.stats("node-a").unwrap();
+        let stats = store.stats("node-a", None).unwrap();
         assert_eq!(stats.batches, 1);
         assert_eq!(stats.flow_buckets, 1);
         assert_eq!(stats.bytes, 300);
+    }
+
+    #[test]
+    fn empty_database_returns_empty_nodes_inventory() {
+        let directory = tempdir().unwrap();
+        let store = ControlStore::open(
+            directory.path().join("control.db"),
+            ControlLimits {
+                max_database_bytes: 1024 * 1024,
+                max_age_seconds: u64::MAX,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(store.nodes().unwrap(), Vec::<NodeInventoryItem>::new());
+    }
+
+    #[test]
+    fn provenance_query_isolates_nodes_and_capture_points() {
+        let directory = tempdir().unwrap();
+        let mut store = ControlStore::open(
+            directory.path().join("control.db"),
+            ControlLimits {
+                max_database_bytes: 1024 * 1024,
+                max_age_seconds: u64::MAX,
+            },
+        )
+        .unwrap();
+
+        let batch_a1 = BatchEnvelope::new(
+            "node-a".into(),
+            "boot".into(),
+            0,
+            100,
+            vec![
+                FlowBucket {
+                    bucket_start: 100,
+                    key: FlowKey {
+                        capture_point: "physical:eth0".into(),
+                        direction: Direction::Egress,
+                        protocol: TransportProtocol::Tcp,
+                        source_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+                        destination_ip: IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
+                        source_port: Some(50000),
+                        destination_port: Some(443),
+                    },
+                    packets: 10,
+                    bytes: 1000,
+                },
+                FlowBucket {
+                    bucket_start: 100,
+                    key: FlowKey {
+                        capture_point: "tunnel:wg0".into(),
+                        direction: Direction::Ingress,
+                        protocol: TransportProtocol::Udp,
+                        source_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2)),
+                        destination_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+                        source_port: Some(51820),
+                        destination_port: Some(51820),
+                    },
+                    packets: 5,
+                    bytes: 500,
+                },
+            ],
+            CaptureDiagnostics::default(),
+        )
+        .unwrap();
+
+        let batch_a2 = BatchEnvelope::new(
+            "node-a".into(),
+            "boot".into(),
+            1,
+            110,
+            vec![FlowBucket {
+                bucket_start: 110,
+                key: FlowKey {
+                    capture_point: "physical:eth0".into(),
+                    direction: Direction::Egress,
+                    protocol: TransportProtocol::Tcp,
+                    source_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+                    destination_ip: IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
+                    source_port: Some(50001),
+                    destination_port: Some(443),
+                },
+                packets: 20,
+                bytes: 2000,
+            }],
+            CaptureDiagnostics::default(),
+        )
+        .unwrap();
+
+        let batch_b = BatchEnvelope::new(
+            "node-b".into(),
+            "boot".into(),
+            0,
+            100,
+            vec![FlowBucket {
+                bucket_start: 100,
+                key: FlowKey {
+                    capture_point: "physical:eth0".into(),
+                    direction: Direction::Ingress,
+                    protocol: TransportProtocol::Tcp,
+                    source_ip: IpAddr::V4(Ipv4Addr::new(2, 2, 2, 2)),
+                    destination_ip: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 3)),
+                    source_port: Some(443),
+                    destination_port: Some(60000),
+                },
+                packets: 7,
+                bytes: 700,
+            }],
+            CaptureDiagnostics::default(),
+        )
+        .unwrap();
+
+        store.ingest(&batch_a1).unwrap();
+        store.ingest(&batch_a2).unwrap();
+        store.ingest(&batch_b).unwrap();
+
+        let nodes = store.nodes().unwrap();
+        assert_eq!(
+            nodes,
+            vec![
+                NodeInventoryItem {
+                    node_id: "node-a".into(),
+                    capture_point: "physical:eth0".into(),
+                    first_bucket_start: 100,
+                    last_bucket_start: 110,
+                },
+                NodeInventoryItem {
+                    node_id: "node-a".into(),
+                    capture_point: "tunnel:wg0".into(),
+                    first_bucket_start: 100,
+                    last_bucket_start: 100,
+                },
+                NodeInventoryItem {
+                    node_id: "node-b".into(),
+                    capture_point: "physical:eth0".into(),
+                    first_bucket_start: 100,
+                    last_bucket_start: 100,
+                },
+            ]
+        );
+
+        let stats_a = store.stats("node-a", None).unwrap();
+        assert_eq!(stats_a.batches, 2);
+        assert_eq!(stats_a.flow_buckets, 3);
+        assert_eq!(stats_a.packets, 35);
+        assert_eq!(stats_a.bytes, 3500);
+
+        let stats_a_eth0 = store.stats("node-a", Some("physical:eth0")).unwrap();
+        assert_eq!(stats_a_eth0.batches, 2);
+        assert_eq!(stats_a_eth0.flow_buckets, 2);
+        assert_eq!(stats_a_eth0.packets, 30);
+        assert_eq!(stats_a_eth0.bytes, 3000);
+
+        let stats_a_wg0 = store.stats("node-a", Some("tunnel:wg0")).unwrap();
+        assert_eq!(stats_a_wg0.batches, 1);
+        assert_eq!(stats_a_wg0.flow_buckets, 1);
+        assert_eq!(stats_a_wg0.packets, 5);
+        assert_eq!(stats_a_wg0.bytes, 500);
+
+        let stats_b = store.stats("node-b", None).unwrap();
+        assert_eq!(stats_b.batches, 1);
+        assert_eq!(stats_b.flow_buckets, 1);
+        assert_eq!(stats_b.packets, 7);
+        assert_eq!(stats_b.bytes, 700);
+
+        let series_a = store.series("node-a", None, None, None).unwrap();
+        assert_eq!(series_a.len(), 2);
+        assert_eq!(
+            series_a[0],
+            SeriesPoint {
+                bucket_start: 100,
+                packets: 15,
+                bytes: 1500
+            }
+        );
+        assert_eq!(
+            series_a[1],
+            SeriesPoint {
+                bucket_start: 110,
+                packets: 20,
+                bytes: 2000
+            }
+        );
+
+        let series_a_wg0 = store
+            .series("node-a", Some("tunnel:wg0"), None, None)
+            .unwrap();
+        assert_eq!(series_a_wg0.len(), 1);
+        assert_eq!(
+            series_a_wg0[0],
+            SeriesPoint {
+                bucket_start: 100,
+                packets: 5,
+                bytes: 500
+            }
+        );
+
+        let series_b = store
+            .series("node-b", Some("physical:eth0"), None, None)
+            .unwrap();
+        assert_eq!(series_b.len(), 1);
+        assert_eq!(
+            series_b[0],
+            SeriesPoint {
+                bucket_start: 100,
+                packets: 7,
+                bytes: 700
+            }
+        );
+
+        let series_a_eth0_window = store
+            .series("node-a", Some("physical:eth0"), Some(100), Some(105))
+            .unwrap();
+        assert_eq!(series_a_eth0_window.len(), 1);
+        assert_eq!(
+            series_a_eth0_window[0],
+            SeriesPoint {
+                bucket_start: 100,
+                packets: 10,
+                bytes: 1000
+            }
+        );
+
+        let error = store
+            .series("node-a", Some("physical:eth0"), Some(120), Some(100))
+            .unwrap_err();
+        assert_eq!(error.to_string(), "from must be less than or equal to to");
+
+        let stats_unknown = store.stats("node-a", Some("unknown")).unwrap();
+        assert_eq!(stats_unknown.batches, 0);
+        assert_eq!(stats_unknown.flow_buckets, 0);
+        assert_eq!(stats_unknown.packets, 0);
+        assert_eq!(stats_unknown.bytes, 0);
+
+        let series_unknown = store.series("node-a", Some("unknown"), None, None).unwrap();
+        assert_eq!(series_unknown, Vec::<SeriesPoint>::new());
     }
 }
