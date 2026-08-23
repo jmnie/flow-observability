@@ -433,9 +433,9 @@
 
   <script>
     // State
-    const BUCKET_CADENCE_SECS = 10;
     let inventory = [];
     let currentMetric = "bytes";
+    let currentRenderGen = 0;
 
     const el = {
       statusBadge: document.getElementById("status-badge"),
@@ -497,6 +497,10 @@
     function clearError() {
       el.errorBanner.textContent = "";
       el.errorBanner.classList.add("hidden");
+      el.statusBadge.textContent = "Online";
+      el.statusBadge.className = "badge success";
+      el.statusBadge.style.borderColor = "";
+      el.statusBadge.style.color = "";
     }
 
     async function fetchJSON(url) {
@@ -508,30 +512,30 @@
     }
 
     async function loadInventory() {
-      try {
-        clearError();
-        inventory = await fetchJSON("/v1/nodes");
+      // 1. Capture previously selected items from current inventory before fetching
+      const prevPrimaryIdx = el.primarySelect.value;
+      const prevCompareIdx = el.compareSelect.value;
+      const prevPrimaryItem = (prevPrimaryIdx !== "" && inventory[Number(prevPrimaryIdx)]) ? inventory[Number(prevPrimaryIdx)] : null;
+      const prevCompareItem = (prevCompareIdx !== "" && inventory[Number(prevCompareIdx)]) ? inventory[Number(prevCompareIdx)] : null;
 
-        if (!inventory || inventory.length === 0) {
+      try {
+        const nextInventory = await fetchJSON("/v1/nodes");
+        inventory = nextInventory || [];
+
+        if (inventory.length === 0) {
           el.emptyState.classList.remove("hidden");
           el.dashboardContent.classList.add("hidden");
           el.statusBadge.textContent = "Empty";
           el.statusBadge.className = "badge";
+          el.statusBadge.style.borderColor = "";
+          el.statusBadge.style.color = "";
           return;
         }
 
+        clearError();
         el.emptyState.classList.add("hidden");
-        el.statusBadge.textContent = "Online";
-        el.statusBadge.className = "badge success";
 
-        // Save selected keys before repopulating
-        const prevPrimaryIdx = el.primarySelect.value;
-        const prevCompareIdx = el.compareSelect.value;
-
-        let prevPrimaryItem = (prevPrimaryIdx !== "" && inventory[Number(prevPrimaryIdx)]) ? inventory[Number(prevPrimaryIdx)] : null;
-        let prevCompareItem = (prevCompareIdx !== "" && inventory[Number(prevCompareIdx)]) ? inventory[Number(prevCompareIdx)] : null;
-
-        // Clear selects
+        // 2. Clear and repopulate selects
         el.primarySelect.textContent = "";
         el.compareSelect.textContent = "";
 
@@ -554,7 +558,7 @@
           el.compareSelect.appendChild(opt2);
         });
 
-        // Restore selection by matching item identity
+        // 3. Reconcile selection by identity in newly fetched inventory
         if (prevPrimaryItem) {
           const found = inventory.findIndex(i => i.node_id === prevPrimaryItem.node_id && i.capture_point === prevPrimaryItem.capture_point);
           el.primarySelect.value = found >= 0 ? String(found) : "0";
@@ -576,6 +580,8 @@
     }
 
     async function renderDashboard() {
+      const gen = ++currentRenderGen;
+
       const primaryIdx = el.primarySelect.value;
       const compareIdx = el.compareSelect.value;
       currentMetric = el.metricSelect.value;
@@ -599,16 +605,22 @@
         const primaryStatsPromise = fetchJSON(`/v1/stats?node=${encodeURIComponent(primaryItem.node_id)}&capture_point=${encodeURIComponent(primaryItem.capture_point)}`);
         const primarySeriesPromise = fetchJSON(`/v1/series?node=${encodeURIComponent(primaryItem.node_id)}&capture_point=${encodeURIComponent(primaryItem.capture_point)}&from=${fromSecs}&to=${toSecs}`);
 
-        let compareStatsPromise = null;
-        let compareSeriesPromise = null;
-        if (compareItem) {
-          compareStatsPromise = fetchJSON(`/v1/stats?node=${encodeURIComponent(compareItem.node_id)}&capture_point=${encodeURIComponent(compareItem.capture_point)}`);
-          compareSeriesPromise = fetchJSON(`/v1/series?node=${encodeURIComponent(compareItem.node_id)}&capture_point=${encodeURIComponent(compareItem.capture_point)}&from=${fromSecs}&to=${toSecs}`);
-        }
+        const compareStatsPromise = compareItem
+          ? fetchJSON(`/v1/stats?node=${encodeURIComponent(compareItem.node_id)}&capture_point=${encodeURIComponent(compareItem.capture_point)}`)
+          : Promise.resolve(null);
+        const compareSeriesPromise = compareItem
+          ? fetchJSON(`/v1/series?node=${encodeURIComponent(compareItem.node_id)}&capture_point=${encodeURIComponent(compareItem.capture_point)}&from=${fromSecs}&to=${toSecs}`)
+          : Promise.resolve(null);
 
-        const [pStats, pSeries] = await Promise.all([primaryStatsPromise, primarySeriesPromise]);
-        const cStats = compareStatsPromise ? await compareStatsPromise : null;
-        const cSeries = compareSeriesPromise ? await compareSeriesPromise : null;
+        const [pStats, pSeries, cStats, cSeries] = await Promise.all([
+          primaryStatsPromise,
+          primarySeriesPromise,
+          compareStatsPromise,
+          compareSeriesPromise,
+        ]);
+
+        // If a newer render was triggered while waiting, ignore this stale result
+        if (gen !== currentRenderGen) return;
 
         // 3. Update Window & Provenance Metadata only after all fetches succeed
         clearError();
@@ -636,6 +648,7 @@
 
         el.dashboardContent.classList.remove("hidden");
       } catch (err) {
+        if (gen !== currentRenderGen) return;
         showError("Failed to fetch telemetry: " + err.message);
       }
     }
