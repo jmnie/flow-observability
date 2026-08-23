@@ -526,6 +526,8 @@
 
         inventory = nextInventory || [];
 
+        clearError();
+
         if (inventory.length === 0) {
           el.emptyState.classList.remove("hidden");
           el.dashboardContent.classList.add("hidden");
@@ -536,7 +538,6 @@
           return;
         }
 
-        clearError();
         el.emptyState.classList.add("hidden");
 
         // 2. Clear and repopulate selects
