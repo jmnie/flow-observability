@@ -25,6 +25,9 @@ curl 'http://127.0.0.1:9080/v1/stats?node=synthetic'
 curl 'http://127.0.0.1:9080/v1/stats?node=synthetic&capture_point=synthetic:fixture'
 curl 'http://127.0.0.1:9080/v1/series?node=synthetic'
 curl 'http://127.0.0.1:9080/v1/series?node=synthetic&capture_point=synthetic:fixture'
+
+# Open the embedded loopback dashboard in your browser
+open http://127.0.0.1:9080/
 ```
 
 Install the packet-capture headers and build the opt-in live-capture feature:
@@ -55,6 +58,6 @@ sudo ./target/release/flow-observability-spike capture \
 - The control database defaults to a 128 MiB main-file cap, a 4 MiB WAL cap, and 48-hour retention. Override these with `--max-control-mib` and `--max-control-hours`.
 - Overflow evicts the oldest unacknowledged batch and records its bucket range as a gap.
 - The control server defaults to loopback. Authentication, internet-facing deployment, and multi-user access are not implemented.
-- No frontend is included yet. The first UI milestone will preserve `node + capture_point + time window` provenance in node and comparison views.
+- The embedded loopback dashboard at `GET /` consumes the existing `/v1/nodes`, `/v1/stats`, and `/v1/series` endpoints to provide single node and comparison views with shared time window provenance.
 
 See [backend verification](docs/backend-verification.md) for the current proof and [roadmap](docs/roadmap.md) for planned work.

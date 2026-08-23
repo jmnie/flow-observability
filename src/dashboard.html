@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow Observability</title>
+  <style>
+    :root {
+      --bg-main: #0b0f19;
+      --bg-card: #151d2f;
+      --bg-input: #1e293b;
+      --border-color: #2e3a50;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary-color: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.15);
+      --compare-color: #fb923c;
+      --compare-glow: rgba(251, 146, 60, 0.15);
+      --success-color: #34d399;
+      --warning-color: #fbbf24;
+      --danger-color: #f87171;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 24px;
+    }
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, var(--primary-color), #818cf8);
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #0b0f19;
+      font-size: 18px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      background-color: var(--bg-input);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+    }
+    .badge.success { color: var(--success-color); border-color: rgba(52, 211, 153, 0.3); }
+    .badge.primary { color: var(--primary-color); border-color: rgba(56, 189, 248, 0.3); }
+    .badge.compare { color: var(--compare-color); border-color: rgba(251, 146, 60, 0.3); }
+
+    /* Controls */
+    .controls-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-end;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 220px;
+    }
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    select, button {
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:focus, button:focus {
+      border-color: var(--primary-color);
+    }
+    button {
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover {
+      background-color: #293548;
+    }
+
+    /* Window metadata banner */
+    .window-banner {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .window-details {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* Stats Cards */
+    .stats-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .stats-scope-badge {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg-input);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card.primary-card {
+      border-left: 4px solid var(--primary-color);
+    }
+    .stat-card.compare-card {
+      border-left: 4px solid var(--compare-color);
+    }
+    .stat-card-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      letter-spacing: -0.5px;
+    }
+    .stat-subvalue {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-top: 4px;
+    }
+
+    /* Chart Section */
+    .chart-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .chart-legend {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .legend-dot.primary { background-color: var(--primary-color); }
+    .legend-dot.compare { background-color: var(--compare-color); }
+    
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 280px;
+    }
+    svg.chart-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .chart-axis {
+      stroke: var(--border-color);
+      stroke-dasharray: 4 4;
+    }
+    .chart-label {
+      fill: var(--text-muted);
+      font-size: 10px;
+      font-family: var(--font-mono);
+    }
+    .chart-path-primary {
+      fill: none;
+      stroke: var(--primary-color);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .chart-path-compare {
+      fill: none;
+      stroke: var(--compare-color);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .chart-dot-primary {
+      fill: var(--primary-color);
+      stroke: var(--bg-card);
+      stroke-width: 2;
+    }
+    .chart-dot-compare {
+      fill: var(--compare-color);
+      stroke: var(--bg-card);
+      stroke-width: 2;
+    }
+
+    /* Table Section */
+    .table-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .table-container {
+      overflow-x: auto;
+      margin-top: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+    th {
+      background-color: var(--bg-input);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
+
+    /* State banners */
+    .state-box {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .state-box.error {
+      color: var(--danger-color);
+      background-color: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.2);
+      border-radius: 8px;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-title">
+        <div class="logo-badge">⚡</div>
+        <div>
+          <h1>Flow Observability</h1>
+        </div>
+      </div>
+      <div id="status-badge" class="badge">Connecting...</div>
+    </header>
+
+    <!-- Controls -->
+    <div class="controls-card">
+      <div class="control-group">
+        <label for="primary-select">Primary Target</label>
+        <select id="primary-select"></select>
+      </div>
+      <div class="control-group">
+        <label for="compare-select">Compare Target (Optional)</label>
+        <select id="compare-select">
+          <option value="">None (Single View)</option>
+        </select>
+      </div>
+      <div class="control-group" style="flex: 0; min-width: 120px;">
+        <label for="metric-select">Metric</label>
+        <select id="metric-select">
+          <option value="bytes">Bytes</option>
+          <option value="packets">Packets</option>
+        </select>
+      </div>
+      <div class="control-group" style="flex: 0; min-width: 100px;">
+        <button id="refresh-btn" type="button">Refresh</button>
+      </div>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="state-box error hidden"></div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="state-box hidden">
+      No telemetry data discovered yet. Ingest or upload flow batches to view observability metrics.
+    </div>
+
+    <!-- Main Content -->
+    <div id="dashboard-content" class="hidden">
+      <!-- Shared Window Metadata -->
+      <div class="window-banner">
+        <div class="window-details">
+          <span><strong>Window:</strong> <span id="meta-window-label">--</span></span>
+          <span><strong>From:</strong> <span id="meta-from-label">--</span></span>
+          <span><strong>To:</strong> <span id="meta-to-label">--</span></span>
+        </div>
+        <div id="meta-provenance-tags" style="display: flex; gap: 8px;"></div>
+      </div>
+
+      <!-- Stats Section -->
+      <div class="stats-section-header">
+        <div class="section-title">Aggregated Statistics</div>
+        <div class="stats-scope-badge">Scope: All retained data</div>
+      </div>
+      <div id="stats-grid" class="stats-grid"></div>
+
+      <!-- Chart Section -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="section-title">Time Series (<span id="chart-metric-title">Bytes</span>)</div>
+          <div class="chart-legend" id="chart-legend"></div>
+        </div>
+        <div class="chart-container" id="chart-box">
+          <svg id="chart-svg" class="chart-svg"></svg>
+        </div>
+      </div>
+
+      <!-- Details Table -->
+      <div class="table-card">
+        <div class="section-title">Bucket Details</div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Bucket Start</th>
+                <th>Target Node</th>
+                <th>Capture Point</th>
+                <th>Bytes</th>
+                <th>Packets</th>
+              </tr>
+            </thead>
+            <tbody id="buckets-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let inventory = [];
+    let currentPrimary = null;
+    let currentCompare = null;
+    let currentMetric = "bytes";
+
+    const el = {
+      statusBadge: document.getElementById("status-badge"),
+      primarySelect: document.getElementById("primary-select"),
+      compareSelect: document.getElementById("compare-select"),
+      metricSelect: document.getElementById("metric-select"),
+      refreshBtn: document.getElementById("refresh-btn"),
+      errorBanner: document.getElementById("error-banner"),
+      emptyState: document.getElementById("empty-state"),
+      dashboardContent: document.getElementById("dashboard-content"),
+      metaWindowLabel: document.getElementById("meta-window-label"),
+      metaFromLabel: document.getElementById("meta-from-label"),
+      metaToLabel: document.getElementById("meta-to-label"),
+      metaProvenanceTags: document.getElementById("meta-provenance-tags"),
+      statsGrid: document.getElementById("stats-grid"),
+      chartMetricTitle: document.getElementById("chart-metric-title"),
+      chartLegend: document.getElementById("chart-legend"),
+      chartSvg: document.getElementById("chart-svg"),
+      bucketsTableBody: document.getElementById("buckets-table-body"),
+    };
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return "0 B";
+      const k = 1024;
+      const sizes = ["B", "KB", "MB", "GB", "TB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return (bytes / Math.pow(k, i)).toFixed(2) + " " + sizes[i];
+    }
+
+    function formatNumber(num) {
+      return num.toLocaleString();
+    }
+
+    function formatTime(unixSecs) {
+      if (!unixSecs) return "--";
+      const d = new Date(unixSecs * 1000);
+      return d.toISOString().replace("T", " ").replace(".000Z", " UTC");
+    }
+
+    function formatTimeShort(unixSecs) {
+      if (!unixSecs) return "--";
+      const d = new Date(unixSecs * 1000);
+      return d.getUTCHours().toString().padStart(2, '0') + ':' +
+             d.getUTCMinutes().toString().padStart(2, '0') + ':' +
+             d.getUTCSeconds().toString().padStart(2, '0');
+    }
+
+    function showError(msg) {
+      el.errorBanner.textContent = msg;
+      el.errorBanner.classList.remove("hidden");
+      el.statusBadge.textContent = "Error";
+      el.statusBadge.className = "badge";
+      el.statusBadge.style.borderColor = "var(--danger-color)";
+      el.statusBadge.style.color = "var(--danger-color)";
+    }
+
+    function clearError() {
+      el.errorBanner.textContent = "";
+      el.errorBanner.classList.add("hidden");
+    }
+
+    async function fetchJSON(url) {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} fetching ${url}`);
+      }
+      return await resp.json();
+    }
+
+    async function loadInventory() {
+      try {
+        clearError();
+        inventory = await fetchJSON("/v1/nodes");
+        
+        if (!inventory || inventory.length === 0) {
+          el.emptyState.classList.remove("hidden");
+          el.dashboardContent.classList.add("hidden");
+          el.statusBadge.textContent = "Empty";
+          el.statusBadge.className = "badge";
+          return;
+        }
+
+        el.emptyState.classList.add("hidden");
+        el.statusBadge.textContent = "Online";
+        el.statusBadge.className = "badge success";
+
+        // Save selected keys before repopulating
+        const prevPrimary = el.primarySelect.value;
+        const prevCompare = el.compareSelect.value;
+
+        // Clear selects
+        el.primarySelect.textContent = "";
+        el.compareSelect.textContent = "";
+
+        const noneOpt = document.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = "None (Single View)";
+        el.compareSelect.appendChild(noneOpt);
+
+        inventory.forEach((item, idx) => {
+          const key = `${item.node_id}::${item.capture_point}`;
+          const label = `${item.node_id} [${item.capture_point}]`;
+
+          const opt1 = document.createElement("option");
+          opt1.value = key;
+          opt1.textContent = label;
+          el.primarySelect.appendChild(opt1);
+
+          const opt2 = document.createElement("option");
+          opt2.value = key;
+          opt2.textContent = label;
+          el.compareSelect.appendChild(opt2);
+        });
+
+        // Restore or default primary
+        if (prevPrimary && inventory.some(i => `${i.node_id}::${i.capture_point}` === prevPrimary)) {
+          el.primarySelect.value = prevPrimary;
+        } else {
+          el.primarySelect.selectedIndex = 0;
+        }
+
+        // Restore compare
+        if (prevCompare && inventory.some(i => `${i.node_id}::${i.capture_point}` === prevCompare)) {
+          el.compareSelect.value = prevCompare;
+        } else {
+          el.compareSelect.value = "";
+        }
+
+        await renderDashboard();
+      } catch (err) {
+        showError("Failed to load nodes: " + err.message);
+      }
+    }
+
+    function findInventoryItem(key) {
+      if (!key) return null;
+      const [nodeId, capturePoint] = key.split("::");
+      return inventory.find(i => i.node_id === nodeId && i.capture_point === capturePoint) || null;
+    }
+
+    async function renderDashboard() {
+      const primaryKey = el.primarySelect.value;
+      const compareKey = el.compareSelect.value;
+      currentMetric = el.metricSelect.value;
+
+      if (!primaryKey) return;
+
+      const primaryItem = findInventoryItem(primaryKey);
+      const compareItem = findInventoryItem(compareKey);
+
+      if (!primaryItem) return;
+
+      // 1. Determine Shared Time Window
+      let fromSecs = primaryItem.first_bucket_start;
+      let toSecs = primaryItem.last_bucket_start;
+
+      if (compareItem) {
+        fromSecs = Math.min(primaryItem.first_bucket_start, compareItem.first_bucket_start);
+        toSecs = Math.max(primaryItem.last_bucket_start, compareItem.last_bucket_start);
+      }
+
+      el.metaWindowLabel.textContent = compareItem ? "Shared Compare Window" : "Single Node Window";
+      el.metaFromLabel.textContent = formatTime(fromSecs);
+      el.metaToLabel.textContent = formatTime(toSecs);
+
+      // Provenance badges
+      el.metaProvenanceTags.textContent = "";
+      const pBadge = document.createElement("span");
+      pBadge.className = "badge primary";
+      pBadge.textContent = `Primary: ${primaryItem.node_id} [${primaryItem.capture_point}]`;
+      el.metaProvenanceTags.appendChild(pBadge);
+
+      if (compareItem) {
+        const cBadge = document.createElement("span");
+        cBadge.className = "badge compare";
+        cBadge.textContent = `Compare: ${compareItem.node_id} [${compareItem.capture_point}]`;
+        el.metaProvenanceTags.appendChild(cBadge);
+      }
+
+      // 2. Fetch Stats and Series
+      try {
+        clearError();
+        const primaryStatsPromise = fetchJSON(`/v1/stats?node=${encodeURIComponent(primaryItem.node_id)}&capture_point=${encodeURIComponent(primaryItem.capture_point)}`);
+        const primarySeriesPromise = fetchJSON(`/v1/series?node=${encodeURIComponent(primaryItem.node_id)}&capture_point=${encodeURIComponent(primaryItem.capture_point)}&from=${fromSecs}&to=${toSecs}`);
+
+        let compareStatsPromise = null;
+        let compareSeriesPromise = null;
+        if (compareItem) {
+          compareStatsPromise = fetchJSON(`/v1/stats?node=${encodeURIComponent(compareItem.node_id)}&capture_point=${encodeURIComponent(compareItem.capture_point)}`);
+          compareSeriesPromise = fetchJSON(`/v1/series?node=${encodeURIComponent(compareItem.node_id)}&capture_point=${encodeURIComponent(compareItem.capture_point)}&from=${fromSecs}&to=${toSecs}`);
+        }
+
+        const [pStats, pSeries] = await Promise.all([primaryStatsPromise, primarySeriesPromise]);
+        const cStats = compareStatsPromise ? await compareStatsPromise : null;
+        const cSeries = compareSeriesPromise ? await compareSeriesPromise : null;
+
+        renderStats(pStats, primaryItem, cStats, compareItem);
+        renderChart(pSeries, primaryItem, cSeries, compareItem, fromSecs, toSecs);
+        renderTable(pSeries, primaryItem, cSeries, compareItem);
+
+        el.dashboardContent.classList.remove("hidden");
+      } catch (err) {
+        showError("Failed to fetch statistics: " + err.message);
+      }
+    }
+
+    function createStatCard(title, value, subvalue, isCompare, tag) {
+      const card = document.createElement("div");
+      card.className = `stat-card ${isCompare ? 'compare-card' : 'primary-card'}`;
+
+      const titleEl = document.createElement("div");
+      titleEl.className = "stat-card-title";
+      const titleSpan = document.createElement("span");
+      titleSpan.textContent = title;
+      titleEl.appendChild(titleSpan);
+
+      const tagSpan = document.createElement("span");
+      tagSpan.className = `badge ${isCompare ? 'compare' : 'primary'}`;
+      tagSpan.style.fontSize = "10px";
+      tagSpan.textContent = tag;
+      titleEl.appendChild(tagSpan);
+
+      const valEl = document.createElement("div");
+      valEl.className = "stat-value";
+      valEl.textContent = value;
+
+      const subEl = document.createElement("div");
+      subEl.className = "stat-subvalue";
+      subEl.textContent = subvalue;
+
+      card.appendChild(titleEl);
+      card.appendChild(valEl);
+      card.appendChild(subEl);
+      return card;
+    }
+
+    function renderStats(pStats, pItem, cStats, cItem) {
+      el.statsGrid.textContent = "";
+
+      const pTag = `${pItem.node_id} [${pItem.capture_point}]`;
+      el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(pStats.total_bytes), `${formatNumber(pStats.total_bytes)} bytes`, false, pTag));
+      el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(pStats.total_packets), "packets", false, pTag));
+      el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(pStats.ingested_batches), "batches", false, pTag));
+      el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(pStats.total_flow_buckets), "buckets", false, pTag));
+
+      if (cStats && cItem) {
+        const cTag = `${cItem.node_id} [${cItem.capture_point}]`;
+        el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(cStats.total_bytes), `${formatNumber(cStats.total_bytes)} bytes`, true, cTag));
+        el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(cStats.total_packets), "packets", true, cTag));
+        el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(cStats.ingested_batches), "batches", true, cTag));
+        el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(cStats.total_flow_buckets), "buckets", true, cTag));
+      }
+    }
+
+    function renderChart(pSeries, pItem, cSeries, cItem, fromSecs, toSecs) {
+      el.chartMetricTitle.textContent = currentMetric === "bytes" ? "Bytes" : "Packets";
+
+      // Legend
+      el.chartLegend.textContent = "";
+      const pLeg = document.createElement("div");
+      pLeg.className = "legend-item";
+      pLeg.innerHTML = `<span class="legend-dot primary"></span> ${pItem.node_id} [${pItem.capture_point}]`;
+      el.chartLegend.appendChild(pLeg);
+
+      if (cSeries && cItem) {
+        const cLeg = document.createElement("div");
+        cLeg.className = "legend-item";
+        cLeg.innerHTML = `<span class="legend-dot compare"></span> ${cItem.node_id} [${cItem.capture_point}]`;
+        el.chartLegend.appendChild(cLeg);
+      }
+
+      // SVG Chart drawing
+      const svg = el.chartSvg;
+      svg.textContent = "";
+
+      const pPoints = pSeries || [];
+      const cPoints = cSeries || [];
+
+      if (pPoints.length === 0 && cPoints.length === 0) {
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", "50%");
+        text.setAttribute("y", "50%");
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("fill", "var(--text-muted)");
+        text.textContent = "No data points in this window";
+        svg.appendChild(text);
+        return;
+      }
+
+      const rect = svg.getBoundingClientRect();
+      const width = rect.width || 800;
+      const height = rect.height || 260;
+      const padLeft = 70;
+      const padRight = 30;
+      const padTop = 20;
+      const padBottom = 40;
+
+      const chartW = width - padLeft - padRight;
+      const chartH = height - padTop - padBottom;
+
+      // Extract values
+      const getVal = (pt) => currentMetric === "bytes" ? pt.bytes : pt.packets;
+
+      let maxVal = 0;
+      pPoints.forEach(pt => { maxVal = Math.max(maxVal, getVal(pt)); });
+      cPoints.forEach(pt => { maxVal = Math.max(maxVal, getVal(pt)); });
+      if (maxVal === 0) maxVal = 10;
+      maxVal = maxVal * 1.15; // padding top
+
+      const timeRange = (toSecs - fromSecs) || 1;
+
+      const getX = (t) => padLeft + ((t - fromSecs) / timeRange) * chartW;
+      const getY = (v) => padTop + chartH - (v / maxVal) * chartH;
+
+      // Draw grid & Y-axis labels
+      const yTicks = 4;
+      for (let i = 0; i <= yTicks; i++) {
+        const v = (maxVal / yTicks) * i;
+        const y = getY(v);
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", padLeft);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", width - padRight);
+        line.setAttribute("y2", y);
+        line.setAttribute("class", "chart-axis");
+        svg.appendChild(line);
+
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", padLeft - 10);
+        label.setAttribute("y", y + 3);
+        label.setAttribute("text-anchor", "end");
+        label.setAttribute("class", "chart-label");
+        label.textContent = currentMetric === "bytes" ? formatBytes(v) : formatNumber(Math.round(v));
+        svg.appendChild(label);
+      }
+
+      // X-axis time labels
+      const xTicks = 5;
+      for (let i = 0; i <= xTicks; i++) {
+        const t = fromSecs + (timeRange / xTicks) * i;
+        const x = getX(t);
+
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", x);
+        label.setAttribute("y", height - 10);
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("class", "chart-label");
+        label.textContent = formatTimeShort(t);
+        svg.appendChild(label);
+      }
+
+      // Helper to draw series without joining across gaps
+      // A gap is defined as consecutive points separated by more than 1.5x expected interval
+      function drawSeries(points, isCompare) {
+        if (points.length === 0) return;
+
+        // Sort by bucket_start
+        const sorted = [...points].sort((a, b) => a.bucket_start - b.bucket_start);
+
+        // Find intervals to detect gaps
+        let typicalInterval = 0;
+        if (sorted.length > 1) {
+          const diffs = [];
+          for (let i = 1; i < sorted.length; i++) {
+            diffs.push(sorted[i].bucket_start - sorted[i-1].bucket_start);
+          }
+          diffs.sort((a, b) => a - b);
+          typicalInterval = diffs[Math.floor(diffs.length / 2)];
+        }
+
+        const segments = [];
+        let curSeg = [sorted[0]];
+
+        for (let i = 1; i < sorted.length; i++) {
+          const dt = sorted[i].bucket_start - sorted[i-1].bucket_start;
+          if (typicalInterval > 0 && dt > typicalInterval * 2.5) {
+            // Gap detected: split segment
+            segments.push(curSeg);
+            curSeg = [sorted[i]];
+          } else {
+            curSeg.push(sorted[i]);
+          }
+        }
+        segments.push(curSeg);
+
+        // Render line segments
+        segments.forEach(seg => {
+          if (seg.length > 1) {
+            let pathD = `M ${getX(seg[0].bucket_start)} ${getY(getVal(seg[0]))}`;
+            for (let i = 1; i < seg.length; i++) {
+              pathD += ` L ${getX(seg[i].bucket_start)} ${getY(getVal(seg[i]))}`;
+            }
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", pathD);
+            path.setAttribute("class", isCompare ? "chart-path-compare" : "chart-path-primary");
+            svg.appendChild(path);
+          }
+        });
+
+        // Render point dots with tooltips
+        sorted.forEach(pt => {
+          const cx = getX(pt.bucket_start);
+          const cy = getY(getVal(pt));
+
+          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          circle.setAttribute("cx", cx);
+          circle.setAttribute("cy", cy);
+          circle.setAttribute("r", "4.5");
+          circle.setAttribute("class", isCompare ? "chart-dot-compare" : "chart-dot-primary");
+
+          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+          title.textContent = `${formatTime(pt.bucket_start)}\n${isCompare ? 'Compare' : 'Primary'}: ${formatBytes(pt.bytes)} (${formatNumber(pt.packets)} pkts)`;
+          circle.appendChild(title);
+
+          svg.appendChild(circle);
+        });
+      }
+
+      drawSeries(pPoints, false);
+      if (cPoints.length > 0) {
+        drawSeries(cPoints, true);
+      }
+    }
+
+    function renderTable(pSeries, pItem, cSeries, cItem) {
+      el.bucketsTableBody.textContent = "";
+
+      const allRows = [];
+      (pSeries || []).forEach(pt => {
+        allRows.push({ ...pt, target: `${pItem.node_id} [${pItem.capture_point}]`, isCompare: false });
+      });
+      (cSeries || []).forEach(pt => {
+        allRows.push({ ...pt, target: `${cItem.node_id} [${cItem.capture_point}]`, isCompare: true });
+      });
+
+      allRows.sort((a, b) => b.bucket_start - a.bucket_start);
+
+      allRows.slice(0, 50).forEach(row => {
+        const tr = document.createElement("tr");
+
+        const tdTime = document.createElement("td");
+        tdTime.textContent = formatTime(row.bucket_start);
+
+        const tdNode = document.createElement("td");
+        tdNode.textContent = row.target.split(" [")[0];
+
+        const tdCp = document.createElement("td");
+        const cpBadge = document.createElement("span");
+        cpBadge.className = `badge ${row.isCompare ? 'compare' : 'primary'}`;
+        cpBadge.textContent = row.target.match(/\[(.*)\]/)[1];
+        tdCp.appendChild(cpBadge);
+
+        const tdBytes = document.createElement("td");
+        tdBytes.textContent = formatBytes(row.bytes);
+
+        const tdPkts = document.createElement("td");
+        tdPkts.textContent = formatNumber(row.packets);
+
+        tr.appendChild(tdTime);
+        tr.appendChild(tdNode);
+        tr.appendChild(tdCp);
+        tr.appendChild(tdBytes);
+        tr.appendChild(tdPkts);
+
+        el.bucketsTableBody.appendChild(tr);
+      });
+    }
+
+    // Event Listeners
+    el.primarySelect.addEventListener("change", renderDashboard);
+    el.compareSelect.addEventListener("change", renderDashboard);
+    el.metricSelect.addEventListener("change", renderDashboard);
+    el.refreshBtn.addEventListener("click", loadInventory);
+
+    // Initial Load
+    window.addEventListener("DOMContentLoaded", loadInventory);
+  </script>
+</body>
+</html>
