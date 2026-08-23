@@ -741,6 +741,7 @@
     let inventory = [];
     let currentMetric = "bytes";
     let currentRenderGen = 0;
+    let lastChartState = null;
 
     const el = {
       statusBadge: document.getElementById("status-badge"),
@@ -795,6 +796,11 @@
       el.statusText.textContent = text;
     }
 
+    function hideErrorBanner() {
+      el.errorBanner.textContent = "";
+      el.errorBanner.classList.add("hidden");
+    }
+
     function showError(msg) {
       el.errorBanner.textContent = msg;
       el.errorBanner.classList.remove("hidden");
@@ -802,12 +808,6 @@
       setBadge("error", "Error");
       el.refreshBtn.disabled = false;
       el.refreshBtn.textContent = "Refresh";
-    }
-
-    function clearError() {
-      el.errorBanner.textContent = "";
-      el.errorBanner.classList.add("hidden");
-      setBadge("success", "Online");
     }
 
     async function fetchJSON(url) {
@@ -857,7 +857,7 @@
         if (gen !== currentRenderGen) return;
 
         inventory = nextInventory || [];
-        clearError();
+        hideErrorBanner();
 
         if (inventory.length === 0) {
           el.emptyState.classList.remove("hidden");
@@ -893,16 +893,10 @@
           el.compareSelect.appendChild(opt2);
         });
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const queryPrimary = urlParams.get("primary");
-        const queryCompare = urlParams.get("compare");
-
-        // 3. Reconcile selection by identity or query parameters
+        // 3. Reconcile selection by identity
         if (prevPrimaryItem) {
           const found = inventory.findIndex(i => i.node_id === prevPrimaryItem.node_id && i.capture_point === prevPrimaryItem.capture_point);
           el.primarySelect.value = found >= 0 ? String(found) : "0";
-        } else if (queryPrimary !== null && inventory[Number(queryPrimary)]) {
-          el.primarySelect.value = queryPrimary;
         } else {
           el.primarySelect.value = "0";
         }
@@ -916,12 +910,6 @@
             el.compareSelect.value = "";
           } else {
             el.compareSelect.value = found >= 0 ? String(found) : "";
-          }
-        } else if (queryCompare !== null && inventory[Number(queryCompare)]) {
-          if (currentPrimary && inventory[Number(queryCompare)].node_id === currentPrimary.node_id && inventory[Number(queryCompare)].capture_point === currentPrimary.capture_point) {
-            el.compareSelect.value = "";
-          } else {
-            el.compareSelect.value = queryCompare;
           }
         } else {
           el.compareSelect.value = "";
@@ -999,7 +987,9 @@
         if (gen !== currentRenderGen) return;
 
         // 3. Update Window & Provenance Metadata
-        clearError();
+        hideErrorBanner();
+        setBadge("success", "Online");
+
         el.metaWindowLabel.textContent = compareItem ? "Shared Compare Window" : "Single Node Window";
         el.metaFromLabel.textContent = formatTime(fromSecs);
         el.metaToLabel.textContent = formatTime(toSecs);
@@ -1022,6 +1012,9 @@
           cBadge.appendChild(document.createTextNode(`Compare: ${compareItem.node_id} [${compareItem.capture_point}]`));
           el.metaProvenanceTags.appendChild(cBadge);
         }
+
+        // Cache chart state for lightweight window resize without re-fetching
+        lastChartState = { pSeries, primaryItem, cSeries, compareItem, fromSecs, toSecs };
 
         // 4. Render sections
         renderKpis(pStats, primaryItem, cStats, compareItem);
@@ -1174,8 +1167,9 @@
 
       if (chartW <= 0 || chartH <= 0) return;
 
-      const pPoints = (pSeries && pSeries.points) ? pSeries.points : [];
-      const cPoints = (cSeries && cSeries.points) ? cSeries.points : [];
+      // Ensure direct array handling per API contract
+      const pPoints = Array.isArray(pSeries) ? pSeries : ((pSeries && pSeries.points) ? pSeries.points : []);
+      const cPoints = Array.isArray(cSeries) ? cSeries : ((cSeries && cSeries.points) ? cSeries.points : []);
 
       let maxVal = 0;
       pPoints.forEach(p => {
@@ -1306,21 +1300,22 @@
 
       const rows = [];
 
-      if (pSeries && pSeries.points) {
-        pSeries.points.forEach(pt => {
-          rows.push({
-            bucket_start: pt.bucket_start,
-            node_id: pItem.node_id,
-            capture_point: pItem.capture_point,
-            bytes: pt.bytes,
-            packets: pt.packets,
-            isCompare: false,
-          });
-        });
-      }
+      const pPoints = Array.isArray(pSeries) ? pSeries : ((pSeries && pSeries.points) ? pSeries.points : []);
+      const cPoints = Array.isArray(cSeries) ? cSeries : ((cSeries && cSeries.points) ? cSeries.points : []);
 
-      if (cItem && cSeries && cSeries.points) {
-        cSeries.points.forEach(pt => {
+      pPoints.forEach(pt => {
+        rows.push({
+          bucket_start: pt.bucket_start,
+          node_id: pItem.node_id,
+          capture_point: pItem.capture_point,
+          bytes: pt.bytes,
+          packets: pt.packets,
+          isCompare: false,
+        });
+      });
+
+      if (cItem) {
+        cPoints.forEach(pt => {
           rows.push({
             bucket_start: pt.bucket_start,
             node_id: cItem.node_id,
@@ -1397,20 +1392,17 @@
     });
 
     window.addEventListener("resize", () => {
-      // Re-render chart on resize without re-fetching
-      const primaryIdx = el.primarySelect.value;
-      if (primaryIdx === "" || !inventory[Number(primaryIdx)]) return;
-      const primaryItem = inventory[Number(primaryIdx)];
-      const compareIdx = el.compareSelect.value;
-      const compareItem = (compareIdx !== "" && inventory[Number(compareIdx)]) ? inventory[Number(compareIdx)] : null;
-      let fromSecs = primaryItem.first_bucket_start;
-      let toSecs = primaryItem.last_bucket_start;
-      if (compareItem) {
-        fromSecs = Math.min(primaryItem.first_bucket_start, compareItem.first_bucket_start);
-        toSecs = Math.max(primaryItem.last_bucket_start, compareItem.last_bucket_start);
+      // Pure client-side chart redraw on window resize without making any API requests
+      if (lastChartState) {
+        renderChart(
+          lastChartState.pSeries,
+          lastChartState.primaryItem,
+          lastChartState.cSeries,
+          lastChartState.compareItem,
+          lastChartState.fromSecs,
+          lastChartState.toSecs
+        );
       }
-      // Trigger dashboard re-render
-      renderDashboard();
     });
 
     // Initialize
