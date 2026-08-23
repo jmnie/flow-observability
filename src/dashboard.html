@@ -605,6 +605,7 @@
         align-items: stretch;
       }
       .control-group, .control-group.tight, .control-group.btn-group {
+        flex: 0 0 auto;
         width: 100%;
         min-width: 100%;
       }
@@ -1213,7 +1214,7 @@
       }
 
       // 2. Time axis labels
-      const xTicks = 4;
+      const xTicks = chartW < 420 ? 2 : 4;
       for (let i = 0; i <= xTicks; i++) {
         const t = fromSecs + (timeSpan / xTicks) * i;
         const x = getX(t);
