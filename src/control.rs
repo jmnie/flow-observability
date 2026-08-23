@@ -843,20 +843,40 @@ mod tests {
         assert_eq!(series_unknown, Vec::<SeriesPoint>::new());
     }
 
-    #[tokio::test]
-    async fn dashboard_route_serves_embedded_html() {
+    #[test]
+    fn dashboard_route_serves_embedded_html() {
         let temp = tempdir().unwrap();
         let store = Arc::new(Mutex::new(
             ControlStore::open(temp.path().join("control.db"), ControlLimits::default()).unwrap(),
         ));
-        let _router = control_router(AppState { store });
+        let router = control_router(AppState { store });
 
-        let html = dashboard().await;
-        assert!(html.0.contains("Flow Observability"));
-        assert!(html.0.contains("/v1/nodes"));
-        assert!(html.0.contains("/v1/stats"));
-        assert!(html.0.contains("/v1/series"));
-        assert!(html.0.contains("All retained data"));
-        assert!(html.0.contains("Compare Target"));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _server_thread = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(async {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let addr = listener.local_addr().unwrap();
+                let _ = tx.send(addr);
+                let _ = axum::serve(listener, router).await;
+            });
+        });
+
+        let addr = rx.recv().unwrap();
+        let url = format!("http://{addr}/");
+        let response = ureq::get(&url).call().unwrap();
+        assert_eq!(response.status(), 200);
+        assert!(response.content_type().starts_with("text/html"));
+
+        let body = response.into_string().unwrap();
+        assert!(body.contains("Flow Observability"));
+        assert!(body.contains("/v1/nodes"));
+        assert!(body.contains("/v1/stats"));
+        assert!(body.contains("/v1/series"));
+        assert!(body.contains("Scope: All retained data"));
+        assert!(body.contains("Compare Target"));
     }
 }

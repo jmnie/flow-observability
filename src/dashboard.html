@@ -13,9 +13,7 @@
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
       --primary-color: #38bdf8;
-      --primary-glow: rgba(56, 189, 248, 0.15);
       --compare-color: #fb923c;
-      --compare-glow: rgba(251, 146, 60, 0.15);
       --success-color: #34d399;
       --warning-color: #fbbf24;
       --danger-color: #f87171;
@@ -242,7 +240,7 @@
     }
     .legend-dot.primary { background-color: var(--primary-color); }
     .legend-dot.compare { background-color: var(--compare-color); }
-    
+
     .chart-container {
       position: relative;
       width: 100%;
@@ -435,9 +433,8 @@
 
   <script>
     // State
+    const BUCKET_CADENCE_SECS = 10;
     let inventory = [];
-    let currentPrimary = null;
-    let currentCompare = null;
     let currentMetric = "bytes";
 
     const el = {
@@ -461,7 +458,7 @@
     };
 
     function formatBytes(bytes) {
-      if (bytes === 0) return "0 B";
+      if (!bytes || bytes === 0) return "0 B";
       const k = 1024;
       const sizes = ["B", "KB", "MB", "GB", "TB"];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -469,6 +466,7 @@
     }
 
     function formatNumber(num) {
+      if (num === undefined || num === null) return "0";
       return num.toLocaleString();
     }
 
@@ -481,14 +479,15 @@
     function formatTimeShort(unixSecs) {
       if (!unixSecs) return "--";
       const d = new Date(unixSecs * 1000);
-      return d.getUTCHours().toString().padStart(2, '0') + ':' +
-             d.getUTCMinutes().toString().padStart(2, '0') + ':' +
-             d.getUTCSeconds().toString().padStart(2, '0');
+      return d.getUTCHours().toString().padStart(2, "0") + ":" +
+             d.getUTCMinutes().toString().padStart(2, "0") + ":" +
+             d.getUTCSeconds().toString().padStart(2, "0");
     }
 
     function showError(msg) {
       el.errorBanner.textContent = msg;
       el.errorBanner.classList.remove("hidden");
+      el.dashboardContent.classList.add("hidden");
       el.statusBadge.textContent = "Error";
       el.statusBadge.className = "badge";
       el.statusBadge.style.borderColor = "var(--danger-color)";
@@ -512,7 +511,7 @@
       try {
         clearError();
         inventory = await fetchJSON("/v1/nodes");
-        
+
         if (!inventory || inventory.length === 0) {
           el.emptyState.classList.remove("hidden");
           el.dashboardContent.classList.add("hidden");
@@ -526,8 +525,11 @@
         el.statusBadge.className = "badge success";
 
         // Save selected keys before repopulating
-        const prevPrimary = el.primarySelect.value;
-        const prevCompare = el.compareSelect.value;
+        const prevPrimaryIdx = el.primarySelect.value;
+        const prevCompareIdx = el.compareSelect.value;
+
+        let prevPrimaryItem = (prevPrimaryIdx !== "" && inventory[Number(prevPrimaryIdx)]) ? inventory[Number(prevPrimaryIdx)] : null;
+        let prevCompareItem = (prevCompareIdx !== "" && inventory[Number(prevCompareIdx)]) ? inventory[Number(prevCompareIdx)] : null;
 
         // Clear selects
         el.primarySelect.textContent = "";
@@ -539,30 +541,30 @@
         el.compareSelect.appendChild(noneOpt);
 
         inventory.forEach((item, idx) => {
-          const key = `${item.node_id}::${item.capture_point}`;
           const label = `${item.node_id} [${item.capture_point}]`;
 
           const opt1 = document.createElement("option");
-          opt1.value = key;
+          opt1.value = String(idx);
           opt1.textContent = label;
           el.primarySelect.appendChild(opt1);
 
           const opt2 = document.createElement("option");
-          opt2.value = key;
+          opt2.value = String(idx);
           opt2.textContent = label;
           el.compareSelect.appendChild(opt2);
         });
 
-        // Restore or default primary
-        if (prevPrimary && inventory.some(i => `${i.node_id}::${i.capture_point}` === prevPrimary)) {
-          el.primarySelect.value = prevPrimary;
+        // Restore selection by matching item identity
+        if (prevPrimaryItem) {
+          const found = inventory.findIndex(i => i.node_id === prevPrimaryItem.node_id && i.capture_point === prevPrimaryItem.capture_point);
+          el.primarySelect.value = found >= 0 ? String(found) : "0";
         } else {
-          el.primarySelect.selectedIndex = 0;
+          el.primarySelect.value = "0";
         }
 
-        // Restore compare
-        if (prevCompare && inventory.some(i => `${i.node_id}::${i.capture_point}` === prevCompare)) {
-          el.compareSelect.value = prevCompare;
+        if (prevCompareItem) {
+          const found = inventory.findIndex(i => i.node_id === prevCompareItem.node_id && i.capture_point === prevCompareItem.capture_point);
+          el.compareSelect.value = found >= 0 ? String(found) : "";
         } else {
           el.compareSelect.value = "";
         }
@@ -573,25 +575,17 @@
       }
     }
 
-    function findInventoryItem(key) {
-      if (!key) return null;
-      const [nodeId, capturePoint] = key.split("::");
-      return inventory.find(i => i.node_id === nodeId && i.capture_point === capturePoint) || null;
-    }
-
     async function renderDashboard() {
-      const primaryKey = el.primarySelect.value;
-      const compareKey = el.compareSelect.value;
+      const primaryIdx = el.primarySelect.value;
+      const compareIdx = el.compareSelect.value;
       currentMetric = el.metricSelect.value;
 
-      if (!primaryKey) return;
+      if (primaryIdx === "" || !inventory[Number(primaryIdx)]) return;
 
-      const primaryItem = findInventoryItem(primaryKey);
-      const compareItem = findInventoryItem(compareKey);
+      const primaryItem = inventory[Number(primaryIdx)];
+      const compareItem = (compareIdx !== "" && inventory[Number(compareIdx)]) ? inventory[Number(compareIdx)] : null;
 
-      if (!primaryItem) return;
-
-      // 1. Determine Shared Time Window
+      // 1. Calculate Shared Time Window
       let fromSecs = primaryItem.first_bucket_start;
       let toSecs = primaryItem.last_bucket_start;
 
@@ -600,27 +594,8 @@
         toSecs = Math.max(primaryItem.last_bucket_start, compareItem.last_bucket_start);
       }
 
-      el.metaWindowLabel.textContent = compareItem ? "Shared Compare Window" : "Single Node Window";
-      el.metaFromLabel.textContent = formatTime(fromSecs);
-      el.metaToLabel.textContent = formatTime(toSecs);
-
-      // Provenance badges
-      el.metaProvenanceTags.textContent = "";
-      const pBadge = document.createElement("span");
-      pBadge.className = "badge primary";
-      pBadge.textContent = `Primary: ${primaryItem.node_id} [${primaryItem.capture_point}]`;
-      el.metaProvenanceTags.appendChild(pBadge);
-
-      if (compareItem) {
-        const cBadge = document.createElement("span");
-        cBadge.className = "badge compare";
-        cBadge.textContent = `Compare: ${compareItem.node_id} [${compareItem.capture_point}]`;
-        el.metaProvenanceTags.appendChild(cBadge);
-      }
-
-      // 2. Fetch Stats and Series
+      // 2. Fetch Stats and Series in parallel
       try {
-        clearError();
         const primaryStatsPromise = fetchJSON(`/v1/stats?node=${encodeURIComponent(primaryItem.node_id)}&capture_point=${encodeURIComponent(primaryItem.capture_point)}`);
         const primarySeriesPromise = fetchJSON(`/v1/series?node=${encodeURIComponent(primaryItem.node_id)}&capture_point=${encodeURIComponent(primaryItem.capture_point)}&from=${fromSecs}&to=${toSecs}`);
 
@@ -635,19 +610,39 @@
         const cStats = compareStatsPromise ? await compareStatsPromise : null;
         const cSeries = compareSeriesPromise ? await compareSeriesPromise : null;
 
+        // 3. Update Window & Provenance Metadata only after all fetches succeed
+        clearError();
+        el.metaWindowLabel.textContent = compareItem ? "Shared Compare Window" : "Single Node Window";
+        el.metaFromLabel.textContent = formatTime(fromSecs);
+        el.metaToLabel.textContent = formatTime(toSecs);
+
+        el.metaProvenanceTags.textContent = "";
+        const pBadge = document.createElement("span");
+        pBadge.className = "badge primary";
+        pBadge.textContent = `Primary: ${primaryItem.node_id} [${primaryItem.capture_point}]`;
+        el.metaProvenanceTags.appendChild(pBadge);
+
+        if (compareItem) {
+          const cBadge = document.createElement("span");
+          cBadge.className = "badge compare";
+          cBadge.textContent = `Compare: ${compareItem.node_id} [${compareItem.capture_point}]`;
+          el.metaProvenanceTags.appendChild(cBadge);
+        }
+
+        // 4. Render sections
         renderStats(pStats, primaryItem, cStats, compareItem);
         renderChart(pSeries, primaryItem, cSeries, compareItem, fromSecs, toSecs);
         renderTable(pSeries, primaryItem, cSeries, compareItem);
 
         el.dashboardContent.classList.remove("hidden");
       } catch (err) {
-        showError("Failed to fetch statistics: " + err.message);
+        showError("Failed to fetch telemetry: " + err.message);
       }
     }
 
     function createStatCard(title, value, subvalue, isCompare, tag) {
       const card = document.createElement("div");
-      card.className = `stat-card ${isCompare ? 'compare-card' : 'primary-card'}`;
+      card.className = `stat-card ${isCompare ? "compare-card" : "primary-card"}`;
 
       const titleEl = document.createElement("div");
       titleEl.className = "stat-card-title";
@@ -656,7 +651,7 @@
       titleEl.appendChild(titleSpan);
 
       const tagSpan = document.createElement("span");
-      tagSpan.className = `badge ${isCompare ? 'compare' : 'primary'}`;
+      tagSpan.className = `badge ${isCompare ? "compare" : "primary"}`;
       tagSpan.style.fontSize = "10px";
       tagSpan.textContent = tag;
       titleEl.appendChild(tagSpan);
@@ -679,34 +674,42 @@
       el.statsGrid.textContent = "";
 
       const pTag = `${pItem.node_id} [${pItem.capture_point}]`;
-      el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(pStats.total_bytes), `${formatNumber(pStats.total_bytes)} bytes`, false, pTag));
-      el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(pStats.total_packets), "packets", false, pTag));
-      el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(pStats.ingested_batches), "batches", false, pTag));
-      el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(pStats.total_flow_buckets), "buckets", false, pTag));
+      el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(pStats.bytes), `${formatNumber(pStats.bytes)} bytes`, false, pTag));
+      el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(pStats.packets), "packets", false, pTag));
+      el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(pStats.batches), "batches", false, pTag));
+      el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(pStats.flow_buckets), "buckets", false, pTag));
 
       if (cStats && cItem) {
         const cTag = `${cItem.node_id} [${cItem.capture_point}]`;
-        el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(cStats.total_bytes), `${formatNumber(cStats.total_bytes)} bytes`, true, cTag));
-        el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(cStats.total_packets), "packets", true, cTag));
-        el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(cStats.ingested_batches), "batches", true, cTag));
-        el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(cStats.total_flow_buckets), "buckets", true, cTag));
+        el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(cStats.bytes), `${formatNumber(cStats.bytes)} bytes`, true, cTag));
+        el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(cStats.packets), "packets", true, cTag));
+        el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(cStats.batches), "batches", true, cTag));
+        el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(cStats.flow_buckets), "buckets", true, cTag));
       }
     }
 
     function renderChart(pSeries, pItem, cSeries, cItem, fromSecs, toSecs) {
       el.chartMetricTitle.textContent = currentMetric === "bytes" ? "Bytes" : "Packets";
 
-      // Legend
+      // Legend without innerHTML
       el.chartLegend.textContent = "";
       const pLeg = document.createElement("div");
       pLeg.className = "legend-item";
-      pLeg.innerHTML = `<span class="legend-dot primary"></span> ${pItem.node_id} [${pItem.capture_point}]`;
+      const pDot = document.createElement("span");
+      pDot.className = "legend-dot primary";
+      pLeg.appendChild(pDot);
+      const pTxt = document.createTextNode(` ${pItem.node_id} [${pItem.capture_point}]`);
+      pLeg.appendChild(pTxt);
       el.chartLegend.appendChild(pLeg);
 
       if (cSeries && cItem) {
         const cLeg = document.createElement("div");
         cLeg.className = "legend-item";
-        cLeg.innerHTML = `<span class="legend-dot compare"></span> ${cItem.node_id} [${cItem.capture_point}]`;
+        const cDot = document.createElement("span");
+        cDot.className = "legend-dot compare";
+        cLeg.appendChild(cDot);
+        const cTxt = document.createTextNode(` ${cItem.node_id} [${cItem.capture_point}]`);
+        cLeg.appendChild(cTxt);
         el.chartLegend.appendChild(cLeg);
       }
 
@@ -739,14 +742,13 @@
       const chartW = width - padLeft - padRight;
       const chartH = height - padTop - padBottom;
 
-      // Extract values
       const getVal = (pt) => currentMetric === "bytes" ? pt.bytes : pt.packets;
 
       let maxVal = 0;
       pPoints.forEach(pt => { maxVal = Math.max(maxVal, getVal(pt)); });
       cPoints.forEach(pt => { maxVal = Math.max(maxVal, getVal(pt)); });
       if (maxVal === 0) maxVal = 10;
-      maxVal = maxVal * 1.15; // padding top
+      maxVal = maxVal * 1.15; // top margin
 
       const timeRange = (toSecs - fromSecs) || 1;
 
@@ -760,16 +762,16 @@
         const y = getY(v);
 
         const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1", padLeft);
-        line.setAttribute("y1", y);
-        line.setAttribute("x2", width - padRight);
-        line.setAttribute("y2", y);
+        line.setAttribute("x1", String(padLeft));
+        line.setAttribute("y1", String(y));
+        line.setAttribute("x2", String(width - padRight));
+        line.setAttribute("y2", String(y));
         line.setAttribute("class", "chart-axis");
         svg.appendChild(line);
 
         const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        label.setAttribute("x", padLeft - 10);
-        label.setAttribute("y", y + 3);
+        label.setAttribute("x", String(padLeft - 10));
+        label.setAttribute("y", String(y + 3));
         label.setAttribute("text-anchor", "end");
         label.setAttribute("class", "chart-label");
         label.textContent = currentMetric === "bytes" ? formatBytes(v) : formatNumber(Math.round(v));
@@ -783,75 +785,45 @@
         const x = getX(t);
 
         const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        label.setAttribute("x", x);
-        label.setAttribute("y", height - 10);
+        label.setAttribute("x", String(x));
+        label.setAttribute("y", String(height - 10));
         label.setAttribute("text-anchor", "middle");
         label.setAttribute("class", "chart-label");
         label.textContent = formatTimeShort(t);
         svg.appendChild(label);
       }
 
-      // Helper to draw series without joining across gaps
-      // A gap is defined as consecutive points separated by more than 1.5x expected interval
+      // Draw series: render discrete bucket observations with stems and dots
       function drawSeries(points, isCompare) {
         if (points.length === 0) return;
 
-        // Sort by bucket_start
         const sorted = [...points].sort((a, b) => a.bucket_start - b.bucket_start);
 
-        // Find intervals to detect gaps
-        let typicalInterval = 0;
-        if (sorted.length > 1) {
-          const diffs = [];
-          for (let i = 1; i < sorted.length; i++) {
-            diffs.push(sorted[i].bucket_start - sorted[i-1].bucket_start);
-          }
-          diffs.sort((a, b) => a - b);
-          typicalInterval = diffs[Math.floor(diffs.length / 2)];
-        }
-
-        const segments = [];
-        let curSeg = [sorted[0]];
-
-        for (let i = 1; i < sorted.length; i++) {
-          const dt = sorted[i].bucket_start - sorted[i-1].bucket_start;
-          if (typicalInterval > 0 && dt > typicalInterval * 2.5) {
-            // Gap detected: split segment
-            segments.push(curSeg);
-            curSeg = [sorted[i]];
-          } else {
-            curSeg.push(sorted[i]);
-          }
-        }
-        segments.push(curSeg);
-
-        // Render line segments
-        segments.forEach(seg => {
-          if (seg.length > 1) {
-            let pathD = `M ${getX(seg[0].bucket_start)} ${getY(getVal(seg[0]))}`;
-            for (let i = 1; i < seg.length; i++) {
-              pathD += ` L ${getX(seg[i].bucket_start)} ${getY(getVal(seg[i]))}`;
-            }
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("d", pathD);
-            path.setAttribute("class", isCompare ? "chart-path-compare" : "chart-path-primary");
-            svg.appendChild(path);
-          }
-        });
-
-        // Render point dots with tooltips
         sorted.forEach(pt => {
           const cx = getX(pt.bucket_start);
           const cy = getY(getVal(pt));
+          const axisY = height - padBottom;
 
+          // Vertical stem to baseline
+          const stem = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          stem.setAttribute("x1", String(cx));
+          stem.setAttribute("y1", String(axisY));
+          stem.setAttribute("x2", String(cx));
+          stem.setAttribute("y2", String(cy));
+          stem.setAttribute("stroke", isCompare ? "var(--compare-color)" : "var(--primary-color)");
+          stem.setAttribute("stroke-width", "1.5");
+          stem.setAttribute("stroke-opacity", "0.4");
+          svg.appendChild(stem);
+
+          // Point circle
           const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          circle.setAttribute("cx", cx);
-          circle.setAttribute("cy", cy);
-          circle.setAttribute("r", "4.5");
+          circle.setAttribute("cx", String(cx));
+          circle.setAttribute("cy", String(cy));
+          circle.setAttribute("r", "5");
           circle.setAttribute("class", isCompare ? "chart-dot-compare" : "chart-dot-primary");
 
           const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-          title.textContent = `${formatTime(pt.bucket_start)}\n${isCompare ? 'Compare' : 'Primary'}: ${formatBytes(pt.bytes)} (${formatNumber(pt.packets)} pkts)`;
+          title.textContent = `${formatTime(pt.bucket_start)}\n${isCompare ? "Compare" : "Primary"}: ${formatBytes(pt.bytes)} (${formatNumber(pt.packets)} pkts)`;
           circle.appendChild(title);
 
           svg.appendChild(circle);
@@ -869,10 +841,24 @@
 
       const allRows = [];
       (pSeries || []).forEach(pt => {
-        allRows.push({ ...pt, target: `${pItem.node_id} [${pItem.capture_point}]`, isCompare: false });
+        allRows.push({
+          bucket_start: pt.bucket_start,
+          node_id: pItem.node_id,
+          capture_point: pItem.capture_point,
+          bytes: pt.bytes,
+          packets: pt.packets,
+          isCompare: false,
+        });
       });
       (cSeries || []).forEach(pt => {
-        allRows.push({ ...pt, target: `${cItem.node_id} [${cItem.capture_point}]`, isCompare: true });
+        allRows.push({
+          bucket_start: pt.bucket_start,
+          node_id: cItem.node_id,
+          capture_point: cItem.capture_point,
+          bytes: pt.bytes,
+          packets: pt.packets,
+          isCompare: true,
+        });
       });
 
       allRows.sort((a, b) => b.bucket_start - a.bucket_start);
@@ -884,12 +870,12 @@
         tdTime.textContent = formatTime(row.bucket_start);
 
         const tdNode = document.createElement("td");
-        tdNode.textContent = row.target.split(" [")[0];
+        tdNode.textContent = row.node_id;
 
         const tdCp = document.createElement("td");
         const cpBadge = document.createElement("span");
-        cpBadge.className = `badge ${row.isCompare ? 'compare' : 'primary'}`;
-        cpBadge.textContent = row.target.match(/\[(.*)\]/)[1];
+        cpBadge.className = `badge ${row.isCompare ? "compare" : "primary"}`;
+        cpBadge.textContent = row.capture_point;
         tdCp.appendChild(cpBadge);
 
         const tdBytes = document.createElement("td");
