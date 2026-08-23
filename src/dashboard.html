@@ -3,217 +3,426 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flow Observability</title>
+  <title>Flow Observability - Local Traffic Console</title>
   <style>
     :root {
-      --bg-main: #0b0f19;
-      --bg-card: #151d2f;
+      --bg-main: #090d14;
+      --bg-surface: #111827;
+      --bg-subsurface: #162033;
       --bg-input: #1e293b;
-      --border-color: #2e3a50;
+      --border-color: #273244;
+      --border-focus: #22d3ee;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
-      --primary-color: #38bdf8;
-      --compare-color: #fb923c;
+      --text-dim: #64748b;
+      --primary-color: #22d3ee;
+      --primary-bg: rgba(34, 211, 238, 0.12);
+      --primary-border: rgba(34, 211, 238, 0.35);
+      --compare-color: #f59e0b;
+      --compare-bg: rgba(245, 158, 11, 0.12);
+      --compare-border: rgba(245, 158, 11, 0.35);
       --success-color: #34d399;
-      --warning-color: #fbbf24;
-      --danger-color: #f87171;
-      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --success-bg: rgba(52, 211, 153, 0.12);
+      --success-border: rgba(52, 211, 153, 0.35);
+      --danger-color: #fb7185;
+      --danger-bg: rgba(251, 113, 133, 0.12);
+      --danger-border: rgba(251, 113, 133, 0.35);
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       background-color: var(--bg-main);
       color: var(--text-main);
       font-family: var(--font-sans);
       line-height: 1.5;
-      padding: 24px;
+      padding: 24px 20px;
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
+
     .container {
-      max-width: 1200px;
+      max-width: 1240px;
       margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
+
+    /* Header */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: 20px;
+      padding-bottom: 16px;
       border-bottom: 1px solid var(--border-color);
-      margin-bottom: 24px;
+      gap: 16px;
+      flex-wrap: wrap;
     }
-    .header-title {
+
+    .header-brand {
       display: flex;
       align-items: center;
       gap: 12px;
+      flex-wrap: wrap;
     }
-    .logo-badge {
-      background: linear-gradient(135deg, var(--primary-color), #818cf8);
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      color: #0b0f19;
+
+    h1.app-title {
       font-size: 18px;
-    }
-    h1 {
-      font-size: 20px;
       font-weight: 600;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.3px;
+      color: var(--text-main);
     }
-    .badge {
-      font-size: 12px;
+
+    .app-tag {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      background-color: var(--bg-subsurface);
+      border: 1px solid var(--border-color);
       padding: 3px 8px;
-      border-radius: 9999px;
-      background-color: var(--bg-input);
+      border-radius: 6px;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background-color: var(--bg-surface);
       color: var(--text-muted);
       border: 1px solid var(--border-color);
       font-family: var(--font-mono);
+      line-height: 1.2;
     }
-    .badge.success { color: var(--success-color); border-color: rgba(52, 211, 153, 0.3); }
-    .badge.primary { color: var(--primary-color); border-color: rgba(56, 189, 248, 0.3); }
-    .badge.compare { color: var(--compare-color); border-color: rgba(251, 146, 60, 0.3); }
 
-    /* Controls */
-    .controls-card {
-      background-color: var(--bg-card);
+    .badge.success {
+      color: var(--success-color);
+      background-color: var(--success-bg);
+      border-color: var(--success-border);
+    }
+
+    .badge.primary {
+      color: var(--primary-color);
+      background-color: var(--primary-bg);
+      border-color: var(--primary-border);
+    }
+
+    .badge.compare {
+      color: var(--compare-color);
+      background-color: var(--compare-bg);
+      border-color: var(--compare-border);
+    }
+
+    .badge.error {
+      color: var(--danger-color);
+      background-color: var(--danger-bg);
+      border-color: var(--danger-border);
+    }
+
+    .badge.refreshing {
+      color: var(--text-muted);
+      background-color: var(--bg-subsurface);
+      border-color: var(--border-color);
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: currentColor;
+    }
+
+    /* Cards */
+    .card {
+      background-color: var(--bg-surface);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 20px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow-card);
+    }
+
+    /* Controls Bar */
+    .controls-bar {
       display: flex;
       flex-wrap: wrap;
       gap: 16px;
       align-items: flex-end;
     }
+
     .control-group {
       display: flex;
       flex-direction: column;
       gap: 6px;
-      flex: 1;
-      min-width: 220px;
+      flex: 1 1 200px;
+      min-width: 0;
     }
+
+    .control-group.tight {
+      flex: 0 0 auto;
+      min-width: 140px;
+    }
+
+    .control-group.btn-group {
+      flex: 0 0 auto;
+      min-width: 110px;
+    }
+
     label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .label-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .label-indicator.primary { background-color: var(--primary-color); }
+    .label-indicator.compare { background-color: var(--compare-color); }
+
+    select, button {
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      min-height: 40px;
+      outline: none;
+      transition: border-color 0.15s, background-color 0.15s;
+      width: 100%;
+    }
+
+    select {
+      font-family: var(--font-mono);
+      cursor: pointer;
+    }
+
+    select:focus-visible, button:focus-visible {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px var(--primary-bg);
+    }
+
+    select:disabled, button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    button.btn-refresh {
+      background-color: var(--bg-subsurface);
+      cursor: pointer;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    button.btn-refresh:hover:not(:disabled) {
+      background-color: #1e2c44;
+      border-color: #3b4c68;
+    }
+
+    /* Context Strip */
+    .context-strip {
+      background-color: var(--bg-subsurface);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .context-left {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .context-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+    }
+
+    .context-item strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .context-targets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* Section Headers */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+    }
+
+    .scope-badge {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      background-color: var(--bg-subsurface);
+      border: 1px solid var(--border-color);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* Merged KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .kpi-card {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 120px;
+    }
+
+    .kpi-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+
+    .kpi-card-title {
       font-size: 12px;
       font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    select, button {
-      background-color: var(--bg-input);
-      border: 1px solid var(--border-color);
-      color: var(--text-main);
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-family: inherit;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    select:focus, button:focus {
-      border-color: var(--primary-color);
-    }
-    button {
-      cursor: pointer;
-      font-weight: 500;
-    }
-    button:hover {
-      background-color: #293548;
+
+    .kpi-values-container {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-top: 4px;
     }
 
-    /* Window metadata banner */
-    .window-banner {
+    .kpi-col {
+      flex: 1;
       display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px 16px;
-      margin-bottom: 20px;
-      font-size: 13px;
-      color: var(--text-muted);
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .kpi-tag {
+      font-size: 10px;
       font-family: var(--font-mono);
-    }
-    .window-details {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    /* Stats Cards */
-    .stats-section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 10px;
-    }
-    .section-title {
-      font-size: 14px;
       font-weight: 600;
-      color: var(--text-main);
-    }
-    .stats-scope-badge {
-      font-size: 11px;
-      color: var(--text-muted);
-      background: var(--bg-input);
-      padding: 2px 8px;
+      padding: 1px 6px;
       border-radius: 4px;
-      font-family: var(--font-mono);
+      display: inline-block;
+      width: fit-content;
+      text-transform: uppercase;
     }
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+
+    .kpi-tag.primary {
+      color: var(--primary-color);
+      background-color: var(--primary-bg);
+      border: 1px solid var(--primary-border);
     }
-    .stat-card {
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 16px;
-      position: relative;
-      overflow: hidden;
+
+    .kpi-tag.compare {
+      color: var(--compare-color);
+      background-color: var(--compare-bg);
+      border: 1px solid var(--compare-border);
     }
-    .stat-card.primary-card {
-      border-left: 4px solid var(--primary-color);
-    }
-    .stat-card.compare-card {
-      border-left: 4px solid var(--compare-color);
-    }
-    .stat-card-title {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      display: flex;
-      justify-content: space-between;
-    }
-    .stat-value {
-      font-size: 24px;
+
+    .kpi-value {
+      font-size: 20px;
       font-weight: 700;
       font-family: var(--font-mono);
       color: var(--text-main);
       letter-spacing: -0.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .stat-subvalue {
-      font-size: 12px;
-      color: var(--text-muted);
+
+    .kpi-subvalue {
+      font-size: 11px;
       font-family: var(--font-mono);
-      margin-top: 4px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .kpi-card-footer {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      margin-top: 10px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
     }
 
     /* Chart Section */
     .chart-card {
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 24px;
+      min-height: 340px;
+      display: flex;
+      flex-direction: column;
     }
+
     .chart-header {
       display: flex;
       justify-content: space-between;
@@ -222,88 +431,113 @@
       flex-wrap: wrap;
       gap: 12px;
     }
+
     .chart-legend {
       display: flex;
+      flex-wrap: wrap;
       gap: 16px;
       font-size: 12px;
       font-family: var(--font-mono);
     }
+
     .legend-item {
       display: flex;
       align-items: center;
       gap: 6px;
+      color: var(--text-muted);
     }
+
     .legend-dot {
-      width: 10px;
-      height: 10px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
     }
+
     .legend-dot.primary { background-color: var(--primary-color); }
     .legend-dot.compare { background-color: var(--compare-color); }
 
     .chart-container {
       position: relative;
       width: 100%;
-      height: 280px;
+      height: 260px;
+      flex: 1;
     }
+
     svg.chart-svg {
       width: 100%;
       height: 100%;
       overflow: visible;
     }
+
     .chart-axis {
       stroke: var(--border-color);
       stroke-dasharray: 4 4;
     }
+
     .chart-label {
-      fill: var(--text-muted);
+      fill: var(--text-dim);
       font-size: 10px;
       font-family: var(--font-mono);
     }
-    .chart-path-primary {
-      fill: none;
+
+    .chart-stem-primary {
       stroke: var(--primary-color);
-      stroke-width: 2.5;
-      stroke-linecap: round;
-      stroke-linejoin: round;
+      stroke-width: 1.5;
+      stroke-opacity: 0.4;
     }
-    .chart-path-compare {
-      fill: none;
+
+    .chart-stem-compare {
       stroke: var(--compare-color);
-      stroke-width: 2.5;
-      stroke-linecap: round;
-      stroke-linejoin: round;
+      stroke-width: 1.5;
+      stroke-opacity: 0.4;
     }
+
     .chart-dot-primary {
       fill: var(--primary-color);
-      stroke: var(--bg-card);
+      stroke: var(--bg-surface);
       stroke-width: 2;
+      cursor: pointer;
+      transition: r 0.15s ease;
     }
+
+    .chart-dot-primary:hover {
+      r: 6;
+      stroke-width: 2.5;
+    }
+
     .chart-dot-compare {
       fill: var(--compare-color);
-      stroke: var(--bg-card);
+      stroke: var(--bg-surface);
       stroke-width: 2;
+      cursor: pointer;
+      transition: r 0.15s ease;
+    }
+
+    .chart-dot-compare:hover {
+      r: 6;
+      stroke-width: 2.5;
     }
 
     /* Table Section */
-    .table-card {
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-    }
     .table-container {
       overflow-x: auto;
-      margin-top: 12px;
+      margin-top: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      max-height: 360px;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: 12px;
       text-align: left;
     }
-    th {
-      background-color: var(--bg-input);
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background-color: var(--bg-subsurface);
       color: var(--text-muted);
       font-weight: 600;
       padding: 10px 14px;
@@ -311,117 +545,188 @@
       font-family: var(--font-mono);
       font-size: 11px;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
+      z-index: 2;
     }
-    td {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border-color);
-      font-family: var(--font-mono);
-    }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
 
-    /* State banners */
-    .state-box {
-      padding: 40px 20px;
+    tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      font-family: var(--font-mono);
+      color: var(--text-main);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:hover td {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    td.num-cell, th.num-cell {
+      text-align: right;
+    }
+
+    /* State Banners */
+    .state-banner {
+      padding: 36px 20px;
       text-align: center;
       color: var(--text-muted);
-      font-size: 14px;
+      font-size: 13px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: var(--shadow-card);
     }
-    .state-box.error {
+
+    .state-banner.error {
       color: var(--danger-color);
-      background-color: rgba(248, 113, 113, 0.08);
-      border: 1px solid rgba(248, 113, 113, 0.2);
-      border-radius: 8px;
+      background-color: var(--danger-bg);
+      border-color: var(--danger-border);
     }
-    .hidden { display: none !important; }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Responsive Breakpoints */
+    @media (max-width: 1024px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 16px 12px;
+      }
+      .controls-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .control-group, .control-group.tight, .control-group.btn-group {
+        width: 100%;
+        min-width: 100%;
+      }
+      .kpi-grid {
+        grid-template-columns: 1fr;
+      }
+      .context-strip {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- Header -->
     <header>
-      <div class="header-title">
-        <div class="logo-badge">⚡</div>
-        <div>
-          <h1>Flow Observability</h1>
-        </div>
+      <div class="header-brand">
+        <h1 class="app-title">Flow Observability</h1>
+        <span class="app-tag">LOCAL TRAFFIC CONSOLE</span>
       </div>
-      <div id="status-badge" class="badge">Connecting...</div>
+      <div id="status-badge" class="badge" aria-live="polite">
+        <span class="badge-dot"></span>
+        <span id="status-text">Connecting...</span>
+      </div>
     </header>
 
     <!-- Controls -->
-    <div class="controls-card">
+    <div class="card controls-bar">
       <div class="control-group">
-        <label for="primary-select">Primary Target</label>
-        <select id="primary-select"></select>
+        <label for="primary-select">
+          <span class="label-indicator primary"></span>
+          Primary Target
+        </label>
+        <select id="primary-select" aria-label="Select primary node and capture point"></select>
       </div>
       <div class="control-group">
-        <label for="compare-select">Compare Target (Optional)</label>
-        <select id="compare-select">
+        <label for="compare-select">
+          <span class="label-indicator compare"></span>
+          Compare Target (Optional)
+        </label>
+        <select id="compare-select" aria-label="Select comparison node and capture point">
           <option value="">None (Single View)</option>
         </select>
       </div>
-      <div class="control-group" style="flex: 0; min-width: 120px;">
+      <div class="control-group tight">
         <label for="metric-select">Metric</label>
-        <select id="metric-select">
+        <select id="metric-select" aria-label="Select metric display">
           <option value="bytes">Bytes</option>
           <option value="packets">Packets</option>
         </select>
       </div>
-      <div class="control-group" style="flex: 0; min-width: 100px;">
-        <button id="refresh-btn" type="button">Refresh</button>
+      <div class="control-group btn-group">
+        <label style="visibility: hidden;">Action</label>
+        <button id="refresh-btn" class="btn-refresh" type="button" aria-label="Refresh telemetry data">Refresh</button>
       </div>
     </div>
 
     <!-- Error Banner -->
-    <div id="error-banner" class="state-box error hidden"></div>
+    <div id="error-banner" class="state-banner error hidden" role="alert" aria-live="assertive"></div>
 
     <!-- Empty State -->
-    <div id="empty-state" class="state-box hidden">
+    <div id="empty-state" class="state-banner hidden" role="status">
       No telemetry data discovered yet. Ingest or upload flow batches to view observability metrics.
     </div>
 
-    <!-- Main Content -->
+    <!-- Dashboard Content -->
     <div id="dashboard-content" class="hidden">
-      <!-- Shared Window Metadata -->
-      <div class="window-banner">
-        <div class="window-details">
-          <span><strong>Window:</strong> <span id="meta-window-label">--</span></span>
-          <span><strong>From:</strong> <span id="meta-from-label">--</span></span>
-          <span><strong>To:</strong> <span id="meta-to-label">--</span></span>
+      <!-- Context Strip (Window & Target Provenance) -->
+      <div class="context-strip">
+        <div class="context-left">
+          <div class="context-item">
+            <span>Window:</span>
+            <strong id="meta-window-label">--</strong>
+          </div>
+          <div class="context-item">
+            <span>From:</span>
+            <strong id="meta-from-label">--</strong>
+          </div>
+          <div class="context-item">
+            <span>To:</span>
+            <strong id="meta-to-label">--</strong>
+          </div>
         </div>
-        <div id="meta-provenance-tags" style="display: flex; gap: 8px;"></div>
+        <div id="meta-provenance-tags" class="context-targets"></div>
       </div>
 
-      <!-- Stats Section -->
-      <div class="stats-section-header">
-        <div class="section-title">Aggregated Statistics</div>
-        <div class="stats-scope-badge">Scope: All retained data</div>
+      <!-- KPI Section (Merged 4 Cards) -->
+      <div>
+        <div class="section-header">
+          <div class="section-title">Aggregated Statistics</div>
+          <div class="scope-badge">Scope: All retained data</div>
+        </div>
+        <div id="kpi-grid" class="kpi-grid"></div>
       </div>
-      <div id="stats-grid" class="stats-grid"></div>
 
-      <!-- Chart Section -->
-      <div class="chart-card">
+      <!-- Time Series Chart -->
+      <div class="card chart-card">
         <div class="chart-header">
           <div class="section-title">Time Series (<span id="chart-metric-title">Bytes</span>)</div>
-          <div class="chart-legend" id="chart-legend"></div>
+          <div id="chart-legend" class="chart-legend"></div>
         </div>
         <div class="chart-container" id="chart-box">
           <svg id="chart-svg" class="chart-svg"></svg>
         </div>
       </div>
 
-      <!-- Details Table -->
-      <div class="table-card">
-        <div class="section-title">Bucket Details</div>
+      <!-- Bucket Details Table -->
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Bucket Details</div>
+        </div>
         <div class="table-container">
           <table>
             <thead>
               <tr>
-                <th>Bucket Start</th>
+                <th>Bucket Start (UTC)</th>
                 <th>Target Node</th>
                 <th>Capture Point</th>
-                <th>Bytes</th>
-                <th>Packets</th>
+                <th class="num-cell">Bytes</th>
+                <th class="num-cell">Packets</th>
               </tr>
             </thead>
             <tbody id="buckets-table-body"></tbody>
@@ -439,6 +744,7 @@
 
     const el = {
       statusBadge: document.getElementById("status-badge"),
+      statusText: document.getElementById("status-text"),
       primarySelect: document.getElementById("primary-select"),
       compareSelect: document.getElementById("compare-select"),
       metricSelect: document.getElementById("metric-select"),
@@ -450,7 +756,7 @@
       metaFromLabel: document.getElementById("meta-from-label"),
       metaToLabel: document.getElementById("meta-to-label"),
       metaProvenanceTags: document.getElementById("meta-provenance-tags"),
-      statsGrid: document.getElementById("stats-grid"),
+      kpiGrid: document.getElementById("kpi-grid"),
       chartMetricTitle: document.getElementById("chart-metric-title"),
       chartLegend: document.getElementById("chart-legend"),
       chartSvg: document.getElementById("chart-svg"),
@@ -484,23 +790,24 @@
              d.getUTCSeconds().toString().padStart(2, "0");
     }
 
+    function setBadge(state, text) {
+      el.statusBadge.className = "badge " + state;
+      el.statusText.textContent = text;
+    }
+
     function showError(msg) {
       el.errorBanner.textContent = msg;
       el.errorBanner.classList.remove("hidden");
       el.dashboardContent.classList.add("hidden");
-      el.statusBadge.textContent = "Error";
-      el.statusBadge.className = "badge";
-      el.statusBadge.style.borderColor = "var(--danger-color)";
-      el.statusBadge.style.color = "var(--danger-color)";
+      setBadge("error", "Error");
+      el.refreshBtn.disabled = false;
+      el.refreshBtn.textContent = "Refresh";
     }
 
     function clearError() {
       el.errorBanner.textContent = "";
       el.errorBanner.classList.add("hidden");
-      el.statusBadge.textContent = "Online";
-      el.statusBadge.className = "badge success";
-      el.statusBadge.style.borderColor = "";
-      el.statusBadge.style.color = "";
+      setBadge("success", "Online");
     }
 
     async function fetchJSON(url) {
@@ -511,10 +818,35 @@
       return await resp.json();
     }
 
+    function updateCompareOptionsDisabled() {
+      const primaryIdx = el.primarySelect.value;
+      if (primaryIdx === "" || !inventory[Number(primaryIdx)]) return;
+      const primaryItem = inventory[Number(primaryIdx)];
+
+      // Check if compare options match primary
+      Array.from(el.compareSelect.options).forEach(opt => {
+        if (opt.value === "") {
+          opt.disabled = false;
+          return;
+        }
+        const item = inventory[Number(opt.value)];
+        if (item && item.node_id === primaryItem.node_id && item.capture_point === primaryItem.capture_point) {
+          opt.disabled = true;
+        } else {
+          opt.disabled = false;
+        }
+      });
+    }
+
     async function loadInventory() {
       const gen = ++currentRenderGen;
 
-      // 1. Capture previously selected items from current inventory before fetching
+      // Lock UI during refresh
+      el.refreshBtn.disabled = true;
+      el.refreshBtn.textContent = "Refreshing…";
+      setBadge("refreshing", "Refreshing…");
+
+      // 1. Capture previously selected items from current inventory
       const prevPrimaryIdx = el.primarySelect.value;
       const prevCompareIdx = el.compareSelect.value;
       const prevPrimaryItem = (prevPrimaryIdx !== "" && inventory[Number(prevPrimaryIdx)]) ? inventory[Number(prevPrimaryIdx)] : null;
@@ -525,22 +857,20 @@
         if (gen !== currentRenderGen) return;
 
         inventory = nextInventory || [];
-
         clearError();
 
         if (inventory.length === 0) {
           el.emptyState.classList.remove("hidden");
           el.dashboardContent.classList.add("hidden");
-          el.statusBadge.textContent = "Empty";
-          el.statusBadge.className = "badge";
-          el.statusBadge.style.borderColor = "";
-          el.statusBadge.style.color = "";
+          setBadge("", "Empty");
+          el.refreshBtn.disabled = false;
+          el.refreshBtn.textContent = "Refresh";
           return;
         }
 
         el.emptyState.classList.add("hidden");
 
-        // 2. Clear and repopulate selects
+        // 2. Repopulate selects safely
         el.primarySelect.textContent = "";
         el.compareSelect.textContent = "";
 
@@ -563,7 +893,7 @@
           el.compareSelect.appendChild(opt2);
         });
 
-        // 3. Reconcile selection by identity in newly fetched inventory
+        // 3. Reconcile selection by identity
         if (prevPrimaryItem) {
           const found = inventory.findIndex(i => i.node_id === prevPrimaryItem.node_id && i.capture_point === prevPrimaryItem.capture_point);
           el.primarySelect.value = found >= 0 ? String(found) : "0";
@@ -571,14 +901,22 @@
           el.primarySelect.value = "0";
         }
 
+        const currentPrimary = inventory[Number(el.primarySelect.value)];
+
         if (prevCompareItem) {
           const found = inventory.findIndex(i => i.node_id === prevCompareItem.node_id && i.capture_point === prevCompareItem.capture_point);
-          el.compareSelect.value = found >= 0 ? String(found) : "";
+          // If compare matches primary, clear compare
+          if (found >= 0 && currentPrimary && inventory[found].node_id === currentPrimary.node_id && inventory[found].capture_point === currentPrimary.capture_point) {
+            el.compareSelect.value = "";
+          } else {
+            el.compareSelect.value = found >= 0 ? String(found) : "";
+          }
         } else {
           el.compareSelect.value = "";
         }
 
-        await renderDashboard();
+        updateCompareOptionsDisabled();
+        await renderDashboardInternal(gen);
       } catch (err) {
         if (gen !== currentRenderGen) return;
         showError("Failed to load nodes: " + err.message);
@@ -587,15 +925,36 @@
 
     async function renderDashboard() {
       const gen = ++currentRenderGen;
+      el.refreshBtn.disabled = true;
+      el.refreshBtn.textContent = "Refreshing…";
+      setBadge("refreshing", "Refreshing…");
 
+      await renderDashboardInternal(gen);
+    }
+
+    async function renderDashboardInternal(gen) {
       const primaryIdx = el.primarySelect.value;
       const compareIdx = el.compareSelect.value;
       currentMetric = el.metricSelect.value;
 
-      if (primaryIdx === "" || !inventory[Number(primaryIdx)]) return;
+      if (primaryIdx === "" || !inventory[Number(primaryIdx)]) {
+        if (gen === currentRenderGen) {
+          el.refreshBtn.disabled = false;
+          el.refreshBtn.textContent = "Refresh";
+        }
+        return;
+      }
 
       const primaryItem = inventory[Number(primaryIdx)];
-      const compareItem = (compareIdx !== "" && inventory[Number(compareIdx)]) ? inventory[Number(compareIdx)] : null;
+      let compareItem = (compareIdx !== "" && inventory[Number(compareIdx)]) ? inventory[Number(compareIdx)] : null;
+
+      // Ensure compare item is not identical to primary item
+      if (compareItem && compareItem.node_id === primaryItem.node_id && compareItem.capture_point === primaryItem.capture_point) {
+        compareItem = null;
+        el.compareSelect.value = "";
+      }
+
+      updateCompareOptionsDisabled();
 
       // 1. Calculate Shared Time Window
       let fromSecs = primaryItem.first_bucket_start;
@@ -625,10 +984,9 @@
           compareSeriesPromise,
         ]);
 
-        // If a newer render was triggered while waiting, ignore this stale result
         if (gen !== currentRenderGen) return;
 
-        // 3. Update Window & Provenance Metadata only after all fetches succeed
+        // 3. Update Window & Provenance Metadata
         clearError();
         el.metaWindowLabel.textContent = compareItem ? "Shared Compare Window" : "Single Node Window";
         el.metaFromLabel.textContent = formatTime(fromSecs);
@@ -637,276 +995,362 @@
         el.metaProvenanceTags.textContent = "";
         const pBadge = document.createElement("span");
         pBadge.className = "badge primary";
-        pBadge.textContent = `Primary: ${primaryItem.node_id} [${primaryItem.capture_point}]`;
+        const pDot = document.createElement("span");
+        pDot.className = "badge-dot";
+        pBadge.appendChild(pDot);
+        pBadge.appendChild(document.createTextNode(`Primary: ${primaryItem.node_id} [${primaryItem.capture_point}]`));
         el.metaProvenanceTags.appendChild(pBadge);
 
         if (compareItem) {
           const cBadge = document.createElement("span");
           cBadge.className = "badge compare";
-          cBadge.textContent = `Compare: ${compareItem.node_id} [${compareItem.capture_point}]`;
+          const cDot = document.createElement("span");
+          cDot.className = "badge-dot";
+          cBadge.appendChild(cDot);
+          cBadge.appendChild(document.createTextNode(`Compare: ${compareItem.node_id} [${compareItem.capture_point}]`));
           el.metaProvenanceTags.appendChild(cBadge);
         }
 
         // 4. Render sections
-        renderStats(pStats, primaryItem, cStats, compareItem);
+        renderKpis(pStats, primaryItem, cStats, compareItem);
         renderChart(pSeries, primaryItem, cSeries, compareItem, fromSecs, toSecs);
         renderTable(pSeries, primaryItem, cSeries, compareItem);
 
         el.dashboardContent.classList.remove("hidden");
+        el.refreshBtn.disabled = false;
+        el.refreshBtn.textContent = "Refresh";
       } catch (err) {
         if (gen !== currentRenderGen) return;
         showError("Failed to fetch telemetry: " + err.message);
       }
     }
 
-    function createStatCard(title, value, subvalue, isCompare, tag) {
-      const card = document.createElement("div");
-      card.className = `stat-card ${isCompare ? "compare-card" : "primary-card"}`;
+    // Render 4 Merged KPI Cards
+    function renderKpis(pStats, pItem, cStats, cItem) {
+      el.kpiGrid.textContent = "";
 
-      const titleEl = document.createElement("div");
-      titleEl.className = "stat-card-title";
-      const titleSpan = document.createElement("span");
-      titleSpan.textContent = title;
-      titleEl.appendChild(titleSpan);
+      const kpis = [
+        {
+          title: "Total Bytes",
+          pVal: formatBytes(pStats.bytes),
+          pSub: `${formatNumber(pStats.bytes)} B`,
+          cVal: cStats ? formatBytes(cStats.bytes) : null,
+          cSub: cStats ? `${formatNumber(cStats.bytes)} B` : null,
+        },
+        {
+          title: "Total Packets",
+          pVal: formatNumber(pStats.packets),
+          pSub: "pkts",
+          cVal: cStats ? formatNumber(cStats.packets) : null,
+          cSub: cStats ? "pkts" : null,
+        },
+        {
+          title: "Ingested Batches",
+          pVal: formatNumber(pStats.batches),
+          pSub: "batches",
+          cVal: cStats ? formatNumber(cStats.batches) : null,
+          cSub: cStats ? "batches" : null,
+        },
+        {
+          title: "Flow Buckets",
+          pVal: formatNumber(pStats.flow_buckets),
+          pSub: "buckets",
+          cVal: cStats ? formatNumber(cStats.flow_buckets) : null,
+          cSub: cStats ? "buckets" : null,
+        },
+      ];
 
-      const tagSpan = document.createElement("span");
-      tagSpan.className = `badge ${isCompare ? "compare" : "primary"}`;
-      tagSpan.style.fontSize = "10px";
-      tagSpan.textContent = tag;
-      titleEl.appendChild(tagSpan);
+      kpis.forEach(kpi => {
+        const card = document.createElement("div");
+        card.className = "kpi-card";
 
-      const valEl = document.createElement("div");
-      valEl.className = "stat-value";
-      valEl.textContent = value;
+        const header = document.createElement("div");
+        header.className = "kpi-card-header";
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "kpi-card-title";
+        titleSpan.textContent = kpi.title;
+        header.appendChild(titleSpan);
+        card.appendChild(header);
 
-      const subEl = document.createElement("div");
-      subEl.className = "stat-subvalue";
-      subEl.textContent = subvalue;
+        const valContainer = document.createElement("div");
+        valContainer.className = "kpi-values-container";
 
-      card.appendChild(titleEl);
-      card.appendChild(valEl);
-      card.appendChild(subEl);
-      return card;
+        // Primary Column
+        const pCol = document.createElement("div");
+        pCol.className = "kpi-col";
+        const pTag = document.createElement("span");
+        pTag.className = "kpi-tag primary";
+        pTag.textContent = "Primary";
+        const pVal = document.createElement("div");
+        pVal.className = "kpi-value";
+        pVal.textContent = kpi.pVal;
+        const pSub = document.createElement("div");
+        pSub.className = "kpi-subvalue";
+        pSub.textContent = kpi.pSub;
+
+        pCol.appendChild(pTag);
+        pCol.appendChild(pVal);
+        pCol.appendChild(pSub);
+        valContainer.appendChild(pCol);
+
+        // Compare Column (if present)
+        if (cStats) {
+          const cCol = document.createElement("div");
+          cCol.className = "kpi-col";
+          const cTag = document.createElement("span");
+          cTag.className = "kpi-tag compare";
+          cTag.textContent = "Compare";
+          const cVal = document.createElement("div");
+          cVal.className = "kpi-value";
+          cVal.textContent = kpi.cVal;
+          const cSub = document.createElement("div");
+          cSub.className = "kpi-subvalue";
+          cSub.textContent = kpi.cSub;
+
+          cCol.appendChild(cTag);
+          cCol.appendChild(cVal);
+          cCol.appendChild(cSub);
+          valContainer.appendChild(cCol);
+        }
+
+        card.appendChild(valContainer);
+
+        const footer = document.createElement("div");
+        footer.className = "kpi-card-footer";
+        footer.textContent = "Scope: All retained data";
+        card.appendChild(footer);
+
+        el.kpiGrid.appendChild(card);
+      });
     }
 
-    function renderStats(pStats, pItem, cStats, cItem) {
-      el.statsGrid.textContent = "";
-
-      const pTag = `${pItem.node_id} [${pItem.capture_point}]`;
-      el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(pStats.bytes), `${formatNumber(pStats.bytes)} bytes`, false, pTag));
-      el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(pStats.packets), "packets", false, pTag));
-      el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(pStats.batches), "batches", false, pTag));
-      el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(pStats.flow_buckets), "buckets", false, pTag));
-
-      if (cStats && cItem) {
-        const cTag = `${cItem.node_id} [${cItem.capture_point}]`;
-        el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(cStats.bytes), `${formatNumber(cStats.bytes)} bytes`, true, cTag));
-        el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(cStats.packets), "packets", true, cTag));
-        el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(cStats.batches), "batches", true, cTag));
-        el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(cStats.flow_buckets), "buckets", true, cTag));
-      }
-    }
-
+    // Render Time Series Chart
     function renderChart(pSeries, pItem, cSeries, cItem, fromSecs, toSecs) {
       el.chartMetricTitle.textContent = currentMetric === "bytes" ? "Bytes" : "Packets";
 
-      // Legend without innerHTML
+      // Render Legend safely
       el.chartLegend.textContent = "";
-      const pLeg = document.createElement("div");
-      pLeg.className = "legend-item";
+
+      const pLegend = document.createElement("div");
+      pLegend.className = "legend-item";
       const pDot = document.createElement("span");
       pDot.className = "legend-dot primary";
-      pLeg.appendChild(pDot);
-      const pTxt = document.createTextNode(` ${pItem.node_id} [${pItem.capture_point}]`);
-      pLeg.appendChild(pTxt);
-      el.chartLegend.appendChild(pLeg);
+      pLegend.appendChild(pDot);
+      pLegend.appendChild(document.createTextNode(`Primary: ${pItem.node_id} [${pItem.capture_point}]`));
+      el.chartLegend.appendChild(pLegend);
 
-      if (cSeries && cItem) {
-        const cLeg = document.createElement("div");
-        cLeg.className = "legend-item";
+      if (cItem) {
+        const cLegend = document.createElement("div");
+        cLegend.className = "legend-item";
         const cDot = document.createElement("span");
         cDot.className = "legend-dot compare";
-        cLeg.appendChild(cDot);
-        const cTxt = document.createTextNode(` ${cItem.node_id} [${cItem.capture_point}]`);
-        cLeg.appendChild(cTxt);
-        el.chartLegend.appendChild(cLeg);
+        cLegend.appendChild(cDot);
+        cLegend.appendChild(document.createTextNode(`Compare: ${cItem.node_id} [${cItem.capture_point}]`));
+        el.chartLegend.appendChild(cLegend);
       }
 
-      // SVG Chart drawing
+      // Render SVG
       const svg = el.chartSvg;
       svg.textContent = "";
 
-      const pPoints = pSeries || [];
-      const cPoints = cSeries || [];
+      const width = svg.clientWidth || 800;
+      const height = svg.clientHeight || 260;
+      const padding = { top: 20, right: 30, bottom: 40, left: 65 };
 
-      if (pPoints.length === 0 && cPoints.length === 0) {
-        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        text.setAttribute("x", "50%");
-        text.setAttribute("y", "50%");
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("fill", "var(--text-muted)");
-        text.textContent = "No data points in this window";
-        svg.appendChild(text);
-        return;
-      }
+      const chartW = width - padding.left - padding.right;
+      const chartH = height - padding.top - padding.bottom;
 
-      const rect = svg.getBoundingClientRect();
-      const width = rect.width || 800;
-      const height = rect.height || 260;
-      const padLeft = 70;
-      const padRight = 30;
-      const padTop = 20;
-      const padBottom = 40;
+      if (chartW <= 0 || chartH <= 0) return;
 
-      const chartW = width - padLeft - padRight;
-      const chartH = height - padTop - padBottom;
-
-      const getVal = (pt) => currentMetric === "bytes" ? pt.bytes : pt.packets;
+      const pPoints = (pSeries && pSeries.points) ? pSeries.points : [];
+      const cPoints = (cSeries && cSeries.points) ? cSeries.points : [];
 
       let maxVal = 0;
-      pPoints.forEach(pt => { maxVal = Math.max(maxVal, getVal(pt)); });
-      cPoints.forEach(pt => { maxVal = Math.max(maxVal, getVal(pt)); });
-      if (maxVal === 0) maxVal = 10;
-      maxVal = maxVal * 1.15; // top margin
+      pPoints.forEach(p => {
+        const v = currentMetric === "bytes" ? p.bytes : p.packets;
+        if (v > maxVal) maxVal = v;
+      });
+      cPoints.forEach(p => {
+        const v = currentMetric === "bytes" ? p.bytes : p.packets;
+        if (v > maxVal) maxVal = v;
+      });
+      if (maxVal === 0) maxVal = 100;
+      maxVal = maxVal * 1.15; // 15% top headroom
 
-      const timeRange = (toSecs - fromSecs) || 1;
+      const timeSpan = (toSecs - fromSecs) || 1;
 
-      const getX = (t) => padLeft + ((t - fromSecs) / timeRange) * chartW;
-      const getY = (v) => padTop + chartH - (v / maxVal) * chartH;
+      function getX(t) {
+        return padding.left + ((t - fromSecs) / timeSpan) * chartW;
+      }
 
-      // Draw grid & Y-axis labels
+      function getY(v) {
+        return padding.top + chartH - (v / maxVal) * chartH;
+      }
+
+      const xmlns = "http://www.w3.org/2000/svg";
+
+      // 1. Grid lines and Y-axis labels
       const yTicks = 4;
       for (let i = 0; i <= yTicks; i++) {
-        const v = (maxVal / yTicks) * i;
-        const y = getY(v);
+        const val = (maxVal / yTicks) * i;
+        const y = getY(val);
 
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1", String(padLeft));
-        line.setAttribute("y1", String(y));
-        line.setAttribute("x2", String(width - padRight));
-        line.setAttribute("y2", String(y));
+        const line = document.createElementNS(xmlns, "line");
+        line.setAttribute("x1", padding.left);
+        line.setAttribute("x2", width - padding.right);
+        line.setAttribute("y1", y);
+        line.setAttribute("y2", y);
         line.setAttribute("class", "chart-axis");
         svg.appendChild(line);
 
-        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        label.setAttribute("x", String(padLeft - 10));
-        label.setAttribute("y", String(y + 3));
+        const label = document.createElementNS(xmlns, "text");
+        label.setAttribute("x", padding.left - 10);
+        label.setAttribute("y", y + 3);
         label.setAttribute("text-anchor", "end");
         label.setAttribute("class", "chart-label");
-        label.textContent = currentMetric === "bytes" ? formatBytes(v) : formatNumber(Math.round(v));
+        label.textContent = currentMetric === "bytes" ? formatBytes(val) : formatNumber(Math.round(val));
         svg.appendChild(label);
       }
 
-      // X-axis time labels
-      const xTicks = 5;
+      // 2. Time axis labels
+      const xTicks = 4;
       for (let i = 0; i <= xTicks; i++) {
-        const t = fromSecs + (timeRange / xTicks) * i;
+        const t = fromSecs + (timeSpan / xTicks) * i;
         const x = getX(t);
 
-        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        label.setAttribute("x", String(x));
-        label.setAttribute("y", String(height - 10));
-        label.setAttribute("text-anchor", "middle");
+        const label = document.createElementNS(xmlns, "text");
+        label.setAttribute("x", x);
+        label.setAttribute("y", height - 12);
+        label.setAttribute("text-anchor", i === 0 ? "start" : (i === xTicks ? "end" : "middle"));
         label.setAttribute("class", "chart-label");
         label.textContent = formatTimeShort(t);
         svg.appendChild(label);
       }
 
-      // Draw series: render discrete bucket observations with stems and dots
-      function drawSeries(points, isCompare) {
-        if (points.length === 0) return;
+      // 3. Discrete Points & Guide Droplines for Primary (Cyan)
+      pPoints.forEach(p => {
+        const v = currentMetric === "bytes" ? p.bytes : p.packets;
+        const cx = getX(p.bucket_start);
+        const cy = getY(v);
+        const baseY = getY(0);
 
-        const sorted = [...points].sort((a, b) => a.bucket_start - b.bucket_start);
+        // Vertical guide dropline
+        const stem = document.createElementNS(xmlns, "line");
+        stem.setAttribute("x1", cx);
+        stem.setAttribute("x2", cx);
+        stem.setAttribute("y1", baseY);
+        stem.setAttribute("y2", cy);
+        stem.setAttribute("class", "chart-stem-primary");
+        svg.appendChild(stem);
 
-        sorted.forEach(pt => {
-          const cx = getX(pt.bucket_start);
-          const cy = getY(getVal(pt));
-          const axisY = height - padBottom;
+        // Discrete point
+        const circle = document.createElementNS(xmlns, "circle");
+        circle.setAttribute("cx", cx);
+        circle.setAttribute("cy", cy);
+        circle.setAttribute("r", "4.5");
+        circle.setAttribute("class", "chart-dot-primary");
 
-          // Vertical stem to baseline
-          const stem = document.createElementNS("http://www.w3.org/2000/svg", "line");
-          stem.setAttribute("x1", String(cx));
-          stem.setAttribute("y1", String(axisY));
-          stem.setAttribute("x2", String(cx));
-          stem.setAttribute("y2", String(cy));
-          stem.setAttribute("stroke", isCompare ? "var(--compare-color)" : "var(--primary-color)");
-          stem.setAttribute("stroke-width", "1.5");
-          stem.setAttribute("stroke-opacity", "0.4");
+        const title = document.createElementNS(xmlns, "title");
+        title.textContent = `[Primary] ${pItem.node_id} [${pItem.capture_point}]\nTime: ${formatTime(p.bucket_start)}\n${currentMetric === "bytes" ? formatBytes(v) : formatNumber(v) + " pkts"}`;
+        circle.appendChild(title);
+        svg.appendChild(circle);
+      });
+
+      // 4. Discrete Points & Guide Droplines for Compare (Amber)
+      if (cItem) {
+        cPoints.forEach(p => {
+          const v = currentMetric === "bytes" ? p.bytes : p.packets;
+          const cx = getX(p.bucket_start);
+          const cy = getY(v);
+          const baseY = getY(0);
+
+          // Vertical guide dropline
+          const stem = document.createElementNS(xmlns, "line");
+          stem.setAttribute("x1", cx);
+          stem.setAttribute("x2", cx);
+          stem.setAttribute("y1", baseY);
+          stem.setAttribute("y2", cy);
+          stem.setAttribute("class", "chart-stem-compare");
           svg.appendChild(stem);
 
-          // Point circle
-          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          circle.setAttribute("cx", String(cx));
-          circle.setAttribute("cy", String(cy));
-          circle.setAttribute("r", "5");
-          circle.setAttribute("class", isCompare ? "chart-dot-compare" : "chart-dot-primary");
+          // Discrete point
+          const circle = document.createElementNS(xmlns, "circle");
+          circle.setAttribute("cx", cx);
+          circle.setAttribute("cy", cy);
+          circle.setAttribute("r", "4.5");
+          circle.setAttribute("class", "chart-dot-compare");
 
-          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-          title.textContent = `${formatTime(pt.bucket_start)}\n${isCompare ? "Compare" : "Primary"}: ${formatBytes(pt.bytes)} (${formatNumber(pt.packets)} pkts)`;
+          const title = document.createElementNS(xmlns, "title");
+          title.textContent = `[Compare] ${cItem.node_id} [${cItem.capture_point}]\nTime: ${formatTime(p.bucket_start)}\n${currentMetric === "bytes" ? formatBytes(v) : formatNumber(v) + " pkts"}`;
           circle.appendChild(title);
-
           svg.appendChild(circle);
         });
       }
-
-      drawSeries(pPoints, false);
-      if (cPoints.length > 0) {
-        drawSeries(cPoints, true);
-      }
     }
 
+    // Render Table
     function renderTable(pSeries, pItem, cSeries, cItem) {
       el.bucketsTableBody.textContent = "";
 
-      const allRows = [];
-      (pSeries || []).forEach(pt => {
-        allRows.push({
-          bucket_start: pt.bucket_start,
-          node_id: pItem.node_id,
-          capture_point: pItem.capture_point,
-          bytes: pt.bytes,
-          packets: pt.packets,
-          isCompare: false,
-        });
-      });
-      (cSeries || []).forEach(pt => {
-        allRows.push({
-          bucket_start: pt.bucket_start,
-          node_id: cItem.node_id,
-          capture_point: cItem.capture_point,
-          bytes: pt.bytes,
-          packets: pt.packets,
-          isCompare: true,
-        });
-      });
+      const rows = [];
 
-      allRows.sort((a, b) => b.bucket_start - a.bucket_start);
+      if (pSeries && pSeries.points) {
+        pSeries.points.forEach(pt => {
+          rows.push({
+            bucket_start: pt.bucket_start,
+            node_id: pItem.node_id,
+            capture_point: pItem.capture_point,
+            bytes: pt.bytes,
+            packets: pt.packets,
+            isCompare: false,
+          });
+        });
+      }
 
-      allRows.slice(0, 50).forEach(row => {
+      if (cItem && cSeries && cSeries.points) {
+        cSeries.points.forEach(pt => {
+          rows.push({
+            bucket_start: pt.bucket_start,
+            node_id: cItem.node_id,
+            capture_point: cItem.capture_point,
+            bytes: pt.bytes,
+            packets: pt.packets,
+            isCompare: true,
+          });
+        });
+      }
+
+      // Sort newest first
+      rows.sort((a, b) => b.bucket_start - a.bucket_start);
+
+      rows.forEach(r => {
         const tr = document.createElement("tr");
 
         const tdTime = document.createElement("td");
-        tdTime.textContent = formatTime(row.bucket_start);
+        tdTime.textContent = formatTime(r.bucket_start);
+        tr.appendChild(tdTime);
 
         const tdNode = document.createElement("td");
-        tdNode.textContent = row.node_id;
+        const nodeBadge = document.createElement("span");
+        nodeBadge.className = `badge ${r.isCompare ? "compare" : "primary"}`;
+        nodeBadge.style.fontSize = "11px";
+        nodeBadge.style.padding = "2px 6px";
+        nodeBadge.textContent = r.node_id;
+        tdNode.appendChild(nodeBadge);
+        tr.appendChild(tdNode);
 
         const tdCp = document.createElement("td");
-        const cpBadge = document.createElement("span");
-        cpBadge.className = `badge ${row.isCompare ? "compare" : "primary"}`;
-        cpBadge.textContent = row.capture_point;
-        tdCp.appendChild(cpBadge);
+        tdCp.textContent = r.capture_point;
+        tr.appendChild(tdCp);
 
         const tdBytes = document.createElement("td");
-        tdBytes.textContent = formatBytes(row.bytes);
+        tdBytes.className = "num-cell";
+        tdBytes.textContent = formatBytes(r.bytes);
+        tr.appendChild(tdBytes);
 
         const tdPkts = document.createElement("td");
-        tdPkts.textContent = formatNumber(row.packets);
-
-        tr.appendChild(tdTime);
-        tr.appendChild(tdNode);
-        tr.appendChild(tdCp);
-        tr.appendChild(tdBytes);
+        tdPkts.className = "num-cell";
+        tdPkts.textContent = formatNumber(r.packets);
         tr.appendChild(tdPkts);
 
         el.bucketsTableBody.appendChild(tr);
@@ -914,13 +1358,51 @@
     }
 
     // Event Listeners
-    el.primarySelect.addEventListener("change", renderDashboard);
-    el.compareSelect.addEventListener("change", renderDashboard);
-    el.metricSelect.addEventListener("change", renderDashboard);
-    el.refreshBtn.addEventListener("click", loadInventory);
+    el.primarySelect.addEventListener("change", () => {
+      const primaryIdx = el.primarySelect.value;
+      const compareIdx = el.compareSelect.value;
+      if (primaryIdx !== "" && compareIdx !== "" && inventory[Number(primaryIdx)] && inventory[Number(compareIdx)]) {
+        const pItem = inventory[Number(primaryIdx)];
+        const cItem = inventory[Number(compareIdx)];
+        if (pItem.node_id === cItem.node_id && pItem.capture_point === cItem.capture_point) {
+          el.compareSelect.value = "";
+        }
+      }
+      updateCompareOptionsDisabled();
+      renderDashboard();
+    });
 
-    // Initial Load
-    window.addEventListener("DOMContentLoaded", loadInventory);
+    el.compareSelect.addEventListener("change", () => {
+      renderDashboard();
+    });
+
+    el.metricSelect.addEventListener("change", () => {
+      renderDashboard();
+    });
+
+    el.refreshBtn.addEventListener("click", () => {
+      loadInventory();
+    });
+
+    window.addEventListener("resize", () => {
+      // Re-render chart on resize without re-fetching
+      const primaryIdx = el.primarySelect.value;
+      if (primaryIdx === "" || !inventory[Number(primaryIdx)]) return;
+      const primaryItem = inventory[Number(primaryIdx)];
+      const compareIdx = el.compareSelect.value;
+      const compareItem = (compareIdx !== "" && inventory[Number(compareIdx)]) ? inventory[Number(compareIdx)] : null;
+      let fromSecs = primaryItem.first_bucket_start;
+      let toSecs = primaryItem.last_bucket_start;
+      if (compareItem) {
+        fromSecs = Math.min(primaryItem.first_bucket_start, compareItem.first_bucket_start);
+        toSecs = Math.max(primaryItem.last_bucket_start, compareItem.last_bucket_start);
+      }
+      // Trigger dashboard re-render
+      renderDashboard();
+    });
+
+    // Initialize
+    loadInventory();
   </script>
 </body>
 </html>
