@@ -407,14 +407,6 @@
       text-overflow: ellipsis;
     }
 
-    .kpi-card-footer {
-      font-size: 10px;
-      font-family: var(--font-mono);
-      color: var(--text-dim);
-      margin-top: 10px;
-      padding-top: 6px;
-      border-top: 1px solid rgba(255, 255, 255, 0.04);
-    }
 
     /* Chart Section */
     .chart-card {
@@ -1127,11 +1119,6 @@
 
         card.appendChild(valContainer);
 
-        const footer = document.createElement("div");
-        footer.className = "kpi-card-footer";
-        footer.textContent = "Scope: All retained data";
-        card.appendChild(footer);
-
         el.kpiGrid.appendChild(card);
       });
     }
@@ -1175,8 +1162,8 @@
       if (chartW <= 0 || chartH <= 0) return;
 
       // Ensure direct array handling per API contract
-      const pPoints = Array.isArray(pSeries) ? pSeries : ((pSeries && pSeries.points) ? pSeries.points : []);
-      const cPoints = Array.isArray(cSeries) ? cSeries : ((cSeries && cSeries.points) ? cSeries.points : []);
+      const pPoints = Array.isArray(pSeries) ? pSeries : [];
+      const cPoints = Array.isArray(cSeries) ? cSeries : [];
 
       let maxVal = 0;
       pPoints.forEach(p => {
@@ -1321,8 +1308,8 @@
 
       const rows = [];
 
-      const pPoints = Array.isArray(pSeries) ? pSeries : ((pSeries && pSeries.points) ? pSeries.points : []);
-      const cPoints = Array.isArray(cSeries) ? cSeries : ((cSeries && cSeries.points) ? cSeries.points : []);
+      const pPoints = Array.isArray(pSeries) ? pSeries : [];
+      const cPoints = Array.isArray(cSeries) ? cSeries : [];
 
       pPoints.forEach(pt => {
         rows.push({
