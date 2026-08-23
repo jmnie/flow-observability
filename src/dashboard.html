@@ -568,6 +568,13 @@
       text-align: right;
     }
 
+    /* Dashboard Content Layout */
+    #dashboard-content {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
     /* State Banners */
     .state-banner {
       padding: 36px 20px;
@@ -1292,6 +1299,20 @@
           svg.appendChild(circle);
         });
       }
+
+      // Empty State for Chart
+      if (pPoints.length === 0 && (!cItem || cPoints.length === 0)) {
+        const emptyLabel = document.createElementNS(xmlns, "text");
+        emptyLabel.setAttribute("x", padding.left + chartW / 2);
+        emptyLabel.setAttribute("y", padding.top + chartH / 2);
+        emptyLabel.setAttribute("text-anchor", "middle");
+        emptyLabel.setAttribute("dominant-baseline", "middle");
+        emptyLabel.setAttribute("class", "chart-label");
+        emptyLabel.style.fontSize = "13px";
+        emptyLabel.style.fill = "var(--text-muted)";
+        emptyLabel.textContent = "No data points in this window";
+        svg.appendChild(emptyLabel);
+      }
     }
 
     // Render Table
@@ -1327,10 +1348,11 @@
         });
       }
 
-      // Sort newest first
+      // Sort newest first and limit to latest 50 rows
       rows.sort((a, b) => b.bucket_start - a.bucket_start);
+      const displayRows = rows.slice(0, 50);
 
-      rows.forEach(r => {
+      displayRows.forEach(r => {
         const tr = document.createElement("tr");
 
         const tdTime = document.createElement("td");
