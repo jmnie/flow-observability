@@ -893,10 +893,16 @@
           el.compareSelect.appendChild(opt2);
         });
 
-        // 3. Reconcile selection by identity
+        const urlParams = new URLSearchParams(window.location.search);
+        const queryPrimary = urlParams.get("primary");
+        const queryCompare = urlParams.get("compare");
+
+        // 3. Reconcile selection by identity or query parameters
         if (prevPrimaryItem) {
           const found = inventory.findIndex(i => i.node_id === prevPrimaryItem.node_id && i.capture_point === prevPrimaryItem.capture_point);
           el.primarySelect.value = found >= 0 ? String(found) : "0";
+        } else if (queryPrimary !== null && inventory[Number(queryPrimary)]) {
+          el.primarySelect.value = queryPrimary;
         } else {
           el.primarySelect.value = "0";
         }
@@ -910,6 +916,12 @@
             el.compareSelect.value = "";
           } else {
             el.compareSelect.value = found >= 0 ? String(found) : "";
+          }
+        } else if (queryCompare !== null && inventory[Number(queryCompare)]) {
+          if (currentPrimary && inventory[Number(queryCompare)].node_id === currentPrimary.node_id && inventory[Number(queryCompare)].capture_point === currentPrimary.capture_point) {
+            el.compareSelect.value = "";
+          } else {
+            el.compareSelect.value = queryCompare;
           }
         } else {
           el.compareSelect.value = "";
