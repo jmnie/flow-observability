@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flow Observability</title>
+  <style>
+    :root {
+      --bg-main: #0b0f19;
+      --bg-card: #151d2f;
+      --bg-input: #1e293b;
+      --border-color: #2e3a50;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary-color: #38bdf8;
+      --compare-color: #fb923c;
+      --success-color: #34d399;
+      --warning-color: #fbbf24;
+      --danger-color: #f87171;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 24px;
+    }
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, var(--primary-color), #818cf8);
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #0b0f19;
+      font-size: 18px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      background-color: var(--bg-input);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+    }
+    .badge.success { color: var(--success-color); border-color: rgba(52, 211, 153, 0.3); }
+    .badge.primary { color: var(--primary-color); border-color: rgba(56, 189, 248, 0.3); }
+    .badge.compare { color: var(--compare-color); border-color: rgba(251, 146, 60, 0.3); }
+
+    /* Controls */
+    .controls-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-end;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 220px;
+    }
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    select, button {
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:focus, button:focus {
+      border-color: var(--primary-color);
+    }
+    button {
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover {
+      background-color: #293548;
+    }
+
+    /* Window metadata banner */
+    .window-banner {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .window-details {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* Stats Cards */
+    .stats-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .stats-scope-badge {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg-input);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card.primary-card {
+      border-left: 4px solid var(--primary-color);
+    }
+    .stat-card.compare-card {
+      border-left: 4px solid var(--compare-color);
+    }
+    .stat-card-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      letter-spacing: -0.5px;
+    }
+    .stat-subvalue {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-top: 4px;
+    }
+
+    /* Chart Section */
+    .chart-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .chart-legend {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .legend-dot.primary { background-color: var(--primary-color); }
+    .legend-dot.compare { background-color: var(--compare-color); }
+
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 280px;
+    }
+    svg.chart-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .chart-axis {
+      stroke: var(--border-color);
+      stroke-dasharray: 4 4;
+    }
+    .chart-label {
+      fill: var(--text-muted);
+      font-size: 10px;
+      font-family: var(--font-mono);
+    }
+    .chart-path-primary {
+      fill: none;
+      stroke: var(--primary-color);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .chart-path-compare {
+      fill: none;
+      stroke: var(--compare-color);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .chart-dot-primary {
+      fill: var(--primary-color);
+      stroke: var(--bg-card);
+      stroke-width: 2;
+    }
+    .chart-dot-compare {
+      fill: var(--compare-color);
+      stroke: var(--bg-card);
+      stroke-width: 2;
+    }
+
+    /* Table Section */
+    .table-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .table-container {
+      overflow-x: auto;
+      margin-top: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+    th {
+      background-color: var(--bg-input);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
+
+    /* State banners */
+    .state-box {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .state-box.error {
+      color: var(--danger-color);
+      background-color: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.2);
+      border-radius: 8px;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-title">
+        <div class="logo-badge">⚡</div>
+        <div>
+          <h1>Flow Observability</h1>
+        </div>
+      </div>
+      <div id="status-badge" class="badge">Connecting...</div>
+    </header>
+
+    <!-- Controls -->
+    <div class="controls-card">
+      <div class="control-group">
+        <label for="primary-select">Primary Target</label>
+        <select id="primary-select"></select>
+      </div>
+      <div class="control-group">
+        <label for="compare-select">Compare Target (Optional)</label>
+        <select id="compare-select">
+          <option value="">None (Single View)</option>
+        </select>
+      </div>
+      <div class="control-group" style="flex: 0; min-width: 120px;">
+        <label for="metric-select">Metric</label>
+        <select id="metric-select">
+          <option value="bytes">Bytes</option>
+          <option value="packets">Packets</option>
+        </select>
+      </div>
+      <div class="control-group" style="flex: 0; min-width: 100px;">
+        <button id="refresh-btn" type="button">Refresh</button>
+      </div>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="state-box error hidden"></div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="state-box hidden">
+      No telemetry data discovered yet. Ingest or upload flow batches to view observability metrics.
+    </div>
+
+    <!-- Main Content -->
+    <div id="dashboard-content" class="hidden">
+      <!-- Shared Window Metadata -->
+      <div class="window-banner">
+        <div class="window-details">
+          <span><strong>Window:</strong> <span id="meta-window-label">--</span></span>
+          <span><strong>From:</strong> <span id="meta-from-label">--</span></span>
+          <span><strong>To:</strong> <span id="meta-to-label">--</span></span>
+        </div>
+        <div id="meta-provenance-tags" style="display: flex; gap: 8px;"></div>
+      </div>
+
+      <!-- Stats Section -->
+      <div class="stats-section-header">
+        <div class="section-title">Aggregated Statistics</div>
+        <div class="stats-scope-badge">Scope: All retained data</div>
+      </div>
+      <div id="stats-grid" class="stats-grid"></div>
+
+      <!-- Chart Section -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="section-title">Time Series (<span id="chart-metric-title">Bytes</span>)</div>
+          <div class="chart-legend" id="chart-legend"></div>
+        </div>
+        <div class="chart-container" id="chart-box">
+          <svg id="chart-svg" class="chart-svg"></svg>
+        </div>
+      </div>
+
+      <!-- Details Table -->
+      <div class="table-card">
+        <div class="section-title">Bucket Details</div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Bucket Start</th>
+                <th>Target Node</th>
+                <th>Capture Point</th>
+                <th>Bytes</th>
+                <th>Packets</th>
+              </tr>
+            </thead>
+            <tbody id="buckets-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let inventory = [];
+    let currentMetric = "bytes";
+    let currentRenderGen = 0;
+
+    const el = {
+      statusBadge: document.getElementById("status-badge"),
+      primarySelect: document.getElementById("primary-select"),
+      compareSelect: document.getElementById("compare-select"),
+      metricSelect: document.getElementById("metric-select"),
+      refreshBtn: document.getElementById("refresh-btn"),
+      errorBanner: document.getElementById("error-banner"),
+      emptyState: document.getElementById("empty-state"),
+      dashboardContent: document.getElementById("dashboard-content"),
+      metaWindowLabel: document.getElementById("meta-window-label"),
+      metaFromLabel: document.getElementById("meta-from-label"),
+      metaToLabel: document.getElementById("meta-to-label"),
+      metaProvenanceTags: document.getElementById("meta-provenance-tags"),
+      statsGrid: document.getElementById("stats-grid"),
+      chartMetricTitle: document.getElementById("chart-metric-title"),
+      chartLegend: document.getElementById("chart-legend"),
+      chartSvg: document.getElementById("chart-svg"),
+      bucketsTableBody: document.getElementById("buckets-table-body"),
+    };
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return "0 B";
+      const k = 1024;
+      const sizes = ["B", "KB", "MB", "GB", "TB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return (bytes / Math.pow(k, i)).toFixed(2) + " " + sizes[i];
+    }
+
+    function formatNumber(num) {
+      if (num === undefined || num === null) return "0";
+      return num.toLocaleString();
+    }
+
+    function formatTime(unixSecs) {
+      if (!unixSecs) return "--";
+      const d = new Date(unixSecs * 1000);
+      return d.toISOString().replace("T", " ").replace(".000Z", " UTC");
+    }
+
+    function formatTimeShort(unixSecs) {
+      if (!unixSecs) return "--";
+      const d = new Date(unixSecs * 1000);
+      return d.getUTCHours().toString().padStart(2, "0") + ":" +
+             d.getUTCMinutes().toString().padStart(2, "0") + ":" +
+             d.getUTCSeconds().toString().padStart(2, "0");
+    }
+
+    function showError(msg) {
+      el.errorBanner.textContent = msg;
+      el.errorBanner.classList.remove("hidden");
+      el.dashboardContent.classList.add("hidden");
+      el.statusBadge.textContent = "Error";
+      el.statusBadge.className = "badge";
+      el.statusBadge.style.borderColor = "var(--danger-color)";
+      el.statusBadge.style.color = "var(--danger-color)";
+    }
+
+    function clearError() {
+      el.errorBanner.textContent = "";
+      el.errorBanner.classList.add("hidden");
+      el.statusBadge.textContent = "Online";
+      el.statusBadge.className = "badge success";
+      el.statusBadge.style.borderColor = "";
+      el.statusBadge.style.color = "";
+    }
+
+    async function fetchJSON(url) {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} fetching ${url}`);
+      }
+      return await resp.json();
+    }
+
+    async function loadInventory() {
+      const gen = ++currentRenderGen;
+
+      // 1. Capture previously selected items from current inventory before fetching
+      const prevPrimaryIdx = el.primarySelect.value;
+      const prevCompareIdx = el.compareSelect.value;
+      const prevPrimaryItem = (prevPrimaryIdx !== "" && inventory[Number(prevPrimaryIdx)]) ? inventory[Number(prevPrimaryIdx)] : null;
+      const prevCompareItem = (prevCompareIdx !== "" && inventory[Number(prevCompareIdx)]) ? inventory[Number(prevCompareIdx)] : null;
+
+      try {
+        const nextInventory = await fetchJSON("/v1/nodes");
+        if (gen !== currentRenderGen) return;
+
+        inventory = nextInventory || [];
+
+        clearError();
+
+        if (inventory.length === 0) {
+          el.emptyState.classList.remove("hidden");
+          el.dashboardContent.classList.add("hidden");
+          el.statusBadge.textContent = "Empty";
+          el.statusBadge.className = "badge";
+          el.statusBadge.style.borderColor = "";
+          el.statusBadge.style.color = "";
+          return;
+        }
+
+        el.emptyState.classList.add("hidden");
+
+        // 2. Clear and repopulate selects
+        el.primarySelect.textContent = "";
+        el.compareSelect.textContent = "";
+
+        const noneOpt = document.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = "None (Single View)";
+        el.compareSelect.appendChild(noneOpt);
+
+        inventory.forEach((item, idx) => {
+          const label = `${item.node_id} [${item.capture_point}]`;
+
+          const opt1 = document.createElement("option");
+          opt1.value = String(idx);
+          opt1.textContent = label;
+          el.primarySelect.appendChild(opt1);
+
+          const opt2 = document.createElement("option");
+          opt2.value = String(idx);
+          opt2.textContent = label;
+          el.compareSelect.appendChild(opt2);
+        });
+
+        // 3. Reconcile selection by identity in newly fetched inventory
+        if (prevPrimaryItem) {
+          const found = inventory.findIndex(i => i.node_id === prevPrimaryItem.node_id && i.capture_point === prevPrimaryItem.capture_point);
+          el.primarySelect.value = found >= 0 ? String(found) : "0";
+        } else {
+          el.primarySelect.value = "0";
+        }
+
+        if (prevCompareItem) {
+          const found = inventory.findIndex(i => i.node_id === prevCompareItem.node_id && i.capture_point === prevCompareItem.capture_point);
+          el.compareSelect.value = found >= 0 ? String(found) : "";
+        } else {
+          el.compareSelect.value = "";
+        }
+
+        await renderDashboard();
+      } catch (err) {
+        if (gen !== currentRenderGen) return;
+        showError("Failed to load nodes: " + err.message);
+      }
+    }
+
+    async function renderDashboard() {
+      const gen = ++currentRenderGen;
+
+      const primaryIdx = el.primarySelect.value;
+      const compareIdx = el.compareSelect.value;
+      currentMetric = el.metricSelect.value;
+
+      if (primaryIdx === "" || !inventory[Number(primaryIdx)]) return;
+
+      const primaryItem = inventory[Number(primaryIdx)];
+      const compareItem = (compareIdx !== "" && inventory[Number(compareIdx)]) ? inventory[Number(compareIdx)] : null;
+
+      // 1. Calculate Shared Time Window
+      let fromSecs = primaryItem.first_bucket_start;
+      let toSecs = primaryItem.last_bucket_start;
+
+      if (compareItem) {
+        fromSecs = Math.min(primaryItem.first_bucket_start, compareItem.first_bucket_start);
+        toSecs = Math.max(primaryItem.last_bucket_start, compareItem.last_bucket_start);
+      }
+
+      // 2. Fetch Stats and Series in parallel
+      try {
+        const primaryStatsPromise = fetchJSON(`/v1/stats?node=${encodeURIComponent(primaryItem.node_id)}&capture_point=${encodeURIComponent(primaryItem.capture_point)}`);
+        const primarySeriesPromise = fetchJSON(`/v1/series?node=${encodeURIComponent(primaryItem.node_id)}&capture_point=${encodeURIComponent(primaryItem.capture_point)}&from=${fromSecs}&to=${toSecs}`);
+
+        const compareStatsPromise = compareItem
+          ? fetchJSON(`/v1/stats?node=${encodeURIComponent(compareItem.node_id)}&capture_point=${encodeURIComponent(compareItem.capture_point)}`)
+          : Promise.resolve(null);
+        const compareSeriesPromise = compareItem
+          ? fetchJSON(`/v1/series?node=${encodeURIComponent(compareItem.node_id)}&capture_point=${encodeURIComponent(compareItem.capture_point)}&from=${fromSecs}&to=${toSecs}`)
+          : Promise.resolve(null);
+
+        const [pStats, pSeries, cStats, cSeries] = await Promise.all([
+          primaryStatsPromise,
+          primarySeriesPromise,
+          compareStatsPromise,
+          compareSeriesPromise,
+        ]);
+
+        // If a newer render was triggered while waiting, ignore this stale result
+        if (gen !== currentRenderGen) return;
+
+        // 3. Update Window & Provenance Metadata only after all fetches succeed
+        clearError();
+        el.metaWindowLabel.textContent = compareItem ? "Shared Compare Window" : "Single Node Window";
+        el.metaFromLabel.textContent = formatTime(fromSecs);
+        el.metaToLabel.textContent = formatTime(toSecs);
+
+        el.metaProvenanceTags.textContent = "";
+        const pBadge = document.createElement("span");
+        pBadge.className = "badge primary";
+        pBadge.textContent = `Primary: ${primaryItem.node_id} [${primaryItem.capture_point}]`;
+        el.metaProvenanceTags.appendChild(pBadge);
+
+        if (compareItem) {
+          const cBadge = document.createElement("span");
+          cBadge.className = "badge compare";
+          cBadge.textContent = `Compare: ${compareItem.node_id} [${compareItem.capture_point}]`;
+          el.metaProvenanceTags.appendChild(cBadge);
+        }
+
+        // 4. Render sections
+        renderStats(pStats, primaryItem, cStats, compareItem);
+        renderChart(pSeries, primaryItem, cSeries, compareItem, fromSecs, toSecs);
+        renderTable(pSeries, primaryItem, cSeries, compareItem);
+
+        el.dashboardContent.classList.remove("hidden");
+      } catch (err) {
+        if (gen !== currentRenderGen) return;
+        showError("Failed to fetch telemetry: " + err.message);
+      }
+    }
+
+    function createStatCard(title, value, subvalue, isCompare, tag) {
+      const card = document.createElement("div");
+      card.className = `stat-card ${isCompare ? "compare-card" : "primary-card"}`;
+
+      const titleEl = document.createElement("div");
+      titleEl.className = "stat-card-title";
+      const titleSpan = document.createElement("span");
+      titleSpan.textContent = title;
+      titleEl.appendChild(titleSpan);
+
+      const tagSpan = document.createElement("span");
+      tagSpan.className = `badge ${isCompare ? "compare" : "primary"}`;
+      tagSpan.style.fontSize = "10px";
+      tagSpan.textContent = tag;
+      titleEl.appendChild(tagSpan);
+
+      const valEl = document.createElement("div");
+      valEl.className = "stat-value";
+      valEl.textContent = value;
+
+      const subEl = document.createElement("div");
+      subEl.className = "stat-subvalue";
+      subEl.textContent = subvalue;
+
+      card.appendChild(titleEl);
+      card.appendChild(valEl);
+      card.appendChild(subEl);
+      return card;
+    }
+
+    function renderStats(pStats, pItem, cStats, cItem) {
+      el.statsGrid.textContent = "";
+
+      const pTag = `${pItem.node_id} [${pItem.capture_point}]`;
+      el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(pStats.bytes), `${formatNumber(pStats.bytes)} bytes`, false, pTag));
+      el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(pStats.packets), "packets", false, pTag));
+      el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(pStats.batches), "batches", false, pTag));
+      el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(pStats.flow_buckets), "buckets", false, pTag));
+
+      if (cStats && cItem) {
+        const cTag = `${cItem.node_id} [${cItem.capture_point}]`;
+        el.statsGrid.appendChild(createStatCard("Total Bytes", formatBytes(cStats.bytes), `${formatNumber(cStats.bytes)} bytes`, true, cTag));
+        el.statsGrid.appendChild(createStatCard("Total Packets", formatNumber(cStats.packets), "packets", true, cTag));
+        el.statsGrid.appendChild(createStatCard("Ingested Batches", formatNumber(cStats.batches), "batches", true, cTag));
+        el.statsGrid.appendChild(createStatCard("Flow Buckets", formatNumber(cStats.flow_buckets), "buckets", true, cTag));
+      }
+    }
+
+    function renderChart(pSeries, pItem, cSeries, cItem, fromSecs, toSecs) {
+      el.chartMetricTitle.textContent = currentMetric === "bytes" ? "Bytes" : "Packets";
+
+      // Legend without innerHTML
+      el.chartLegend.textContent = "";
+      const pLeg = document.createElement("div");
+      pLeg.className = "legend-item";
+      const pDot = document.createElement("span");
+      pDot.className = "legend-dot primary";
+      pLeg.appendChild(pDot);
+      const pTxt = document.createTextNode(` ${pItem.node_id} [${pItem.capture_point}]`);
+      pLeg.appendChild(pTxt);
+      el.chartLegend.appendChild(pLeg);
+
+      if (cSeries && cItem) {
+        const cLeg = document.createElement("div");
+        cLeg.className = "legend-item";
+        const cDot = document.createElement("span");
+        cDot.className = "legend-dot compare";
+        cLeg.appendChild(cDot);
+        const cTxt = document.createTextNode(` ${cItem.node_id} [${cItem.capture_point}]`);
+        cLeg.appendChild(cTxt);
+        el.chartLegend.appendChild(cLeg);
+      }
+
+      // SVG Chart drawing
+      const svg = el.chartSvg;
+      svg.textContent = "";
+
+      const pPoints = pSeries || [];
+      const cPoints = cSeries || [];
+
+      if (pPoints.length === 0 && cPoints.length === 0) {
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", "50%");
+        text.setAttribute("y", "50%");
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("fill", "var(--text-muted)");
+        text.textContent = "No data points in this window";
+        svg.appendChild(text);
+        return;
+      }
+
+      const rect = svg.getBoundingClientRect();
+      const width = rect.width || 800;
+      const height = rect.height || 260;
+      const padLeft = 70;
+      const padRight = 30;
+      const padTop = 20;
+      const padBottom = 40;
+
+      const chartW = width - padLeft - padRight;
+      const chartH = height - padTop - padBottom;
+
+      const getVal = (pt) => currentMetric === "bytes" ? pt.bytes : pt.packets;
+
+      let maxVal = 0;
+      pPoints.forEach(pt => { maxVal = Math.max(maxVal, getVal(pt)); });
+      cPoints.forEach(pt => { maxVal = Math.max(maxVal, getVal(pt)); });
+      if (maxVal === 0) maxVal = 10;
+      maxVal = maxVal * 1.15; // top margin
+
+      const timeRange = (toSecs - fromSecs) || 1;
+
+      const getX = (t) => padLeft + ((t - fromSecs) / timeRange) * chartW;
+      const getY = (v) => padTop + chartH - (v / maxVal) * chartH;
+
+      // Draw grid & Y-axis labels
+      const yTicks = 4;
+      for (let i = 0; i <= yTicks; i++) {
+        const v = (maxVal / yTicks) * i;
+        const y = getY(v);
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", String(padLeft));
+        line.setAttribute("y1", String(y));
+        line.setAttribute("x2", String(width - padRight));
+        line.setAttribute("y2", String(y));
+        line.setAttribute("class", "chart-axis");
+        svg.appendChild(line);
+
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", String(padLeft - 10));
+        label.setAttribute("y", String(y + 3));
+        label.setAttribute("text-anchor", "end");
+        label.setAttribute("class", "chart-label");
+        label.textContent = currentMetric === "bytes" ? formatBytes(v) : formatNumber(Math.round(v));
+        svg.appendChild(label);
+      }
+
+      // X-axis time labels
+      const xTicks = 5;
+      for (let i = 0; i <= xTicks; i++) {
+        const t = fromSecs + (timeRange / xTicks) * i;
+        const x = getX(t);
+
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", String(x));
+        label.setAttribute("y", String(height - 10));
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("class", "chart-label");
+        label.textContent = formatTimeShort(t);
+        svg.appendChild(label);
+      }
+
+      // Draw series: render discrete bucket observations with stems and dots
+      function drawSeries(points, isCompare) {
+        if (points.length === 0) return;
+
+        const sorted = [...points].sort((a, b) => a.bucket_start - b.bucket_start);
+
+        sorted.forEach(pt => {
+          const cx = getX(pt.bucket_start);
+          const cy = getY(getVal(pt));
+          const axisY = height - padBottom;
+
+          // Vertical stem to baseline
+          const stem = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          stem.setAttribute("x1", String(cx));
+          stem.setAttribute("y1", String(axisY));
+          stem.setAttribute("x2", String(cx));
+          stem.setAttribute("y2", String(cy));
+          stem.setAttribute("stroke", isCompare ? "var(--compare-color)" : "var(--primary-color)");
+          stem.setAttribute("stroke-width", "1.5");
+          stem.setAttribute("stroke-opacity", "0.4");
+          svg.appendChild(stem);
+
+          // Point circle
+          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          circle.setAttribute("cx", String(cx));
+          circle.setAttribute("cy", String(cy));
+          circle.setAttribute("r", "5");
+          circle.setAttribute("class", isCompare ? "chart-dot-compare" : "chart-dot-primary");
+
+          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+          title.textContent = `${formatTime(pt.bucket_start)}\n${isCompare ? "Compare" : "Primary"}: ${formatBytes(pt.bytes)} (${formatNumber(pt.packets)} pkts)`;
+          circle.appendChild(title);
+
+          svg.appendChild(circle);
+        });
+      }
+
+      drawSeries(pPoints, false);
+      if (cPoints.length > 0) {
+        drawSeries(cPoints, true);
+      }
+    }
+
+    function renderTable(pSeries, pItem, cSeries, cItem) {
+      el.bucketsTableBody.textContent = "";
+
+      const allRows = [];
+      (pSeries || []).forEach(pt => {
+        allRows.push({
+          bucket_start: pt.bucket_start,
+          node_id: pItem.node_id,
+          capture_point: pItem.capture_point,
+          bytes: pt.bytes,
+          packets: pt.packets,
+          isCompare: false,
+        });
+      });
+      (cSeries || []).forEach(pt => {
+        allRows.push({
+          bucket_start: pt.bucket_start,
+          node_id: cItem.node_id,
+          capture_point: cItem.capture_point,
+          bytes: pt.bytes,
+          packets: pt.packets,
+          isCompare: true,
+        });
+      });
+
+      allRows.sort((a, b) => b.bucket_start - a.bucket_start);
+
+      allRows.slice(0, 50).forEach(row => {
+        const tr = document.createElement("tr");
+
+        const tdTime = document.createElement("td");
+        tdTime.textContent = formatTime(row.bucket_start);
+
+        const tdNode = document.createElement("td");
+        tdNode.textContent = row.node_id;
+
+        const tdCp = document.createElement("td");
+        const cpBadge = document.createElement("span");
+        cpBadge.className = `badge ${row.isCompare ? "compare" : "primary"}`;
+        cpBadge.textContent = row.capture_point;
+        tdCp.appendChild(cpBadge);
+
+        const tdBytes = document.createElement("td");
+        tdBytes.textContent = formatBytes(row.bytes);
+
+        const tdPkts = document.createElement("td");
+        tdPkts.textContent = formatNumber(row.packets);
+
+        tr.appendChild(tdTime);
+        tr.appendChild(tdNode);
+        tr.appendChild(tdCp);
+        tr.appendChild(tdBytes);
+        tr.appendChild(tdPkts);
+
+        el.bucketsTableBody.appendChild(tr);
+      });
+    }
+
+    // Event Listeners
+    el.primarySelect.addEventListener("change", renderDashboard);
+    el.compareSelect.addEventListener("change", renderDashboard);
+    el.metricSelect.addEventListener("change", renderDashboard);
+    el.refreshBtn.addEventListener("click", loadInventory);
+
+    // Initial Load
+    window.addEventListener("DOMContentLoaded", loadInventory);
+  </script>
+</body>
+</html>

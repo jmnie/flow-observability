@@ -7,6 +7,7 @@ use axum::{
     Json, Router,
     extract::{Query, State},
     http::StatusCode,
+    response::Html,
     routing::{get, post},
 };
 use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
@@ -371,6 +372,18 @@ struct NodeQuery {
     capture_point: Option<String>,
 }
 
+const DASHBOARD_HTML: &str = include_str!("dashboard.html");
+
+fn control_router(state: AppState) -> Router {
+    Router::new()
+        .route("/", get(dashboard))
+        .route("/v1/ingest", post(ingest))
+        .route("/v1/nodes", get(nodes))
+        .route("/v1/stats", get(stats))
+        .route("/v1/series", get(series))
+        .with_state(state)
+}
+
 pub async fn serve(
     path: impl AsRef<Path>,
     listen: &str,
@@ -379,15 +392,14 @@ pub async fn serve(
     let state = AppState {
         store: Arc::new(Mutex::new(ControlStore::open(path, limits)?)),
     };
-    let router = Router::new()
-        .route("/v1/ingest", post(ingest))
-        .route("/v1/nodes", get(nodes))
-        .route("/v1/stats", get(stats))
-        .route("/v1/series", get(series))
-        .with_state(state);
+    let router = control_router(state);
     let listener = tokio::net::TcpListener::bind(listen).await?;
     axum::serve(listener, router).await?;
     Ok(())
+}
+
+async fn dashboard() -> Html<&'static str> {
+    Html(DASHBOARD_HTML)
 }
 
 async fn nodes(
@@ -829,5 +841,42 @@ mod tests {
 
         let series_unknown = store.series("node-a", Some("unknown"), None, None).unwrap();
         assert_eq!(series_unknown, Vec::<SeriesPoint>::new());
+    }
+
+    #[test]
+    fn dashboard_route_serves_embedded_html() {
+        let temp = tempdir().unwrap();
+        let store = Arc::new(Mutex::new(
+            ControlStore::open(temp.path().join("control.db"), ControlLimits::default()).unwrap(),
+        ));
+        let router = control_router(AppState { store });
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _server_thread = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(async {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let addr = listener.local_addr().unwrap();
+                let _ = tx.send(addr);
+                let _ = axum::serve(listener, router).await;
+            });
+        });
+
+        let addr = rx.recv().unwrap();
+        let url = format!("http://{addr}/");
+        let response = ureq::get(&url).call().unwrap();
+        assert_eq!(response.status(), 200);
+        assert!(response.content_type().starts_with("text/html"));
+
+        let body = response.into_string().unwrap();
+        assert!(body.contains("Flow Observability"));
+        assert!(body.contains("/v1/nodes"));
+        assert!(body.contains("/v1/stats"));
+        assert!(body.contains("/v1/series"));
+        assert!(body.contains("Scope: All retained data"));
+        assert!(body.contains("Compare Target"));
     }
 }
