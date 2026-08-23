@@ -512,6 +512,8 @@
     }
 
     async function loadInventory() {
+      const gen = ++currentRenderGen;
+
       // 1. Capture previously selected items from current inventory before fetching
       const prevPrimaryIdx = el.primarySelect.value;
       const prevCompareIdx = el.compareSelect.value;
@@ -520,6 +522,8 @@
 
       try {
         const nextInventory = await fetchJSON("/v1/nodes");
+        if (gen !== currentRenderGen) return;
+
         inventory = nextInventory || [];
 
         if (inventory.length === 0) {
@@ -575,6 +579,7 @@
 
         await renderDashboard();
       } catch (err) {
+        if (gen !== currentRenderGen) return;
         showError("Failed to load nodes: " + err.message);
       }
     }
